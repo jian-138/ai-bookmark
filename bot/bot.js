@@ -1,21 +1,31 @@
-require('dotenv').config();  
-const { Wechaty } = require('wechaty');  
-async function main() {  
-  const bot = new Wechaty({  
-    name: 'ai-bookmark',  
-    puppet: 'wechaty-puppet-service',  
-    puppetOptions: { token: process.env.WECHATY_TOKEN },  
-  });  
-  bot.on('scan', (qrcode) = ' + qrcode));  
-  bot.on('login', (user) = ${user} µÇÂ¼`));  
-  bot.on('message', async (msg) = 
-    if (msg.type() === Wechaty.Message.Type.URL) {  
-      const url = msg.url();  
-      console.log(`ÊÕµ½·ÖÏí: ${url}`);  
-      await msg.say(`? ÒÑÊÕµ½Á´½Ó: ${url}\nAI´¦ÀíÖĞ...`);  
-    }  
-  });  
-  await bot.start();  
-  console.log('?? »úÆ÷ÈËÆô¶¯³É¹¦');  
-}  
-main().catch(console.error); 
+require('dotenv').config();
+const { Wechaty } = require('wechaty');
+
+async function main() {
+  const bot = new Wechaty({
+    name: 'ai-bookmark',
+    puppet: 'wechaty-puppet-service',
+    puppetOptions: { token: process.env.WECHATY_TOKEN },
+  });
+
+  bot.on('scan', (qrcode) => {
+    console.log('Scan QR Code to login: ' + qrcode);
+  });
+
+  bot.on('login', (user) => {
+    console.log(`${user} ç™»å½•`);
+  });
+
+  bot.on('message', async (msg) => {
+    if (msg.type() === Wechaty.Message.Type.URL) {
+      const url = msg.url();
+      console.log(`æ”¶åˆ°é“¾æ¥: ${url}`);
+      await msg.say(`âœ… å·²æ”¶åˆ°é“¾æ¥: ${url}\nAI åˆ†æä¸­...`);
+    }
+  });
+
+  await bot.start();
+  console.log('ğŸ¤– å¾®ä¿¡æœºå™¨äººå¯åŠ¨æˆåŠŸ');
+}
+
+main().catch(console.error);
