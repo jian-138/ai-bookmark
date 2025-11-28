@@ -109,3 +109,8 @@ backend/*.sqlite
 
 # Kiro IDE
 .kiro/cache/
+
+# Node.js (from remote)
+node_modules/
+.env
+.env.example
