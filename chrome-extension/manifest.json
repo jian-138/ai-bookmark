@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "AI书签收藏助手",
+  "version": "1.0.0",
+  "description": "AI驱动的智能书签系统，选中文本一键收藏并自动分析分类",
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://10.81.5.132:8000/*",
+    "https://ai-bookmark-production.up.railway.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ]
+}

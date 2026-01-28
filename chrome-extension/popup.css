@@ -1,0 +1,269 @@
+/* popup.css - Popup页面样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 400px;
+  min-height: 500px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #f5f7fa;
+}
+
+.page {
+  padding: 20px;
+}
+
+.header {
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  font-size: 24px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.header h2 {
+  font-size: 18px;
+  color: #333;
+  display: inline-block;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 14px;
+}
+
+.header-actions {
+  float: right;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-form input {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.primary-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.primary-btn:active {
+  transform: translateY(0);
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.icon-btn {
+  padding: 8px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #666;
+  margin-left: 8px;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: #f5f7fa;
+  color: #333;
+}
+
+.hint {
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.error-msg {
+  padding: 12px;
+  background: #fee;
+  color: #c33;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.collections-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.collection-item {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.collection-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.collection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.collection-id {
+  font-size: 11px;
+  color: #999;
+  font-family: monospace;
+}
+
+.collection-status {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.status-analyzed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-ai_failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.collection-text {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.collection-url {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.collection-url a {
+  color: #667eea;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.collection-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #e0e7ff;
+  color: #4338ca;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.collection-summary {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border-left: 3px solid #667eea;
+  border-radius: 4px;
+}
+
+.collection-footer {
+  font-size: 11px;
+  color: #999;
+}
+
+.loading, .empty, .error {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.error {
+  color: #c33;
+}
+
+.footer {
+  position: sticky;
+  bottom: 0;
+  background: #f5f7fa;
+  padding: 16px 0;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 20px;
+}
+
+.stats {
+  text-align: center;
+  font-size: 13px;
+  color: #666;
+}
+
+/* 滚动条样式 */
+.collections-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.collections-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.collections-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.collections-list::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}

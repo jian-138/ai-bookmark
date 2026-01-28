@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI书签收藏助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- 登录页面 -->
+  <div id="login-page" class="page">
+    <div class="header">
+      <h1>📚 AI书签</h1>
+      <p class="subtitle">智能收藏 · AI分析</p>
+    </div>
+    
+    <div class="login-form">
+      <input type="text" id="username" placeholder="用户名" value="test">
+      <input type="password" id="password" placeholder="密码" value="test123">
+      <button id="login-btn" class="primary-btn">登录</button>
+      <p class="hint">测试账号: test / test123</p>
+    </div>
+    
+    <div id="login-error" class="error-msg" style="display: none;"></div>
+  </div>
+  
+  <!-- 主页面 -->
+  <div id="main-page" class="page" style="display: none;">
+    <div class="header">
+      <h2>我的收藏</h2>
+      <div class="header-actions">
+        <button id="sync-btn" class="icon-btn" title="同步离线收藏">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+          </svg>
+        </button>
+        <button id="logout-btn" class="icon-btn" title="退出登录">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <div id="collections-list" class="collections-list">
+      <div class="loading">加载中...</div>
+    </div>
+    
+    <div class="footer">
+      <p class="stats">
+        <span id="total-count">0</span> 条收藏
+        <span id="offline-count" style="display: none;"> · <span id="offline-num">0</span> 条待同步</span>
+      </p>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
