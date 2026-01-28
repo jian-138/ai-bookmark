@@ -107,10 +107,28 @@ backend/instance/
 backend/*.db
 backend/*.sqlite
 
-# Kiro IDE
-.kiro/cache/
+# IDE and Editor
+.kiro/
+.qoder/
+.idea/
+*.swp
+*.swo
 
-# Node.js (from remote)
+# Node.js
 node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Environment files
 .env
-.env.example
+.env.*
+!.env.example
+env.example
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+*~
+.gitignore#
