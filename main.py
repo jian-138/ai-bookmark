@@ -131,6 +131,9 @@ async def internal_analyze(req: AnalyzeRequest):
 def root():
     return {"message": "AI 收藏夹服务运行中"}
 
+# --------- 内存存储（临时方案） ----------
+collections_storage = []  # 临时存储收藏列表
+
 # --------- 移动端 API ----------
 # 用户登录
 @app.post("/api/v1/auth/login", response_model=LoginResponse)
@@ -158,6 +161,25 @@ async def submit_collection(req: CollectionRequest, authorization: Optional[str]
     # 生成收藏ID
     collect_id = "col_" + str(uuid.uuid4())
     created_at = datetime.utcnow().isoformat() + "Z"
+    updated_at = created_at
+    
+    # 创建收藏项
+    collection_item = {
+        "collect_id": collect_id,
+        "user_id": req.user_id,
+        "original_text": req.original_text,
+        "url": req.url,
+        "ai_keywords": ["AI", "测试"],  # TODO: 调用AI分析
+        "ai_category": "科技",
+        "summary": req.original_text[:50] + "...",
+        "ai_confidence": 0.85,
+        "status": "ANALYZED",
+        "created_at": created_at,
+        "updated_at": updated_at
+    }
+    
+    # 存储到内存
+    collections_storage.insert(0, collection_item)  # 插入到列表开头
     
     # TODO: 存储到数据库
     # TODO: 触发AI分析异步任务
@@ -203,29 +225,15 @@ async def get_collections(
     authorization: Optional[str] = Header(None)
 ):
     """获取收藏列表"""
-    # TODO: 从数据库查询
-    # 这里返回模拟数据
-    mock_items = [
-        CollectionItem(
-            collect_id=f"col_{i}",
-            user_id="usr_test",
-            original_text=f"测试收藏内容 {i}",
-            url=f"https://example.com/{i}",
-            ai_keywords=["AI", "测试"],
-            ai_category="科技",
-            summary=f"摘要 {i}",
-            ai_confidence=0.85,
-            status="ANALYZED",
-            created_at=datetime.utcnow().isoformat() + "Z",
-            updated_at=datetime.utcnow().isoformat() + "Z"
-        )
-        for i in range(1, 6)
-    ]
+    # 从内存中获取数据
+    start = (page - 1) * size
+    end = start + size
+    page_items = collections_storage[start:end]
     
     return CollectionListResponse(
         success=True,
-        data=mock_items,
-        total=5,
+        data=page_items,
+        total=len(collections_storage),
         page=page,
         size=size
     )

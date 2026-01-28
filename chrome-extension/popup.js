@@ -90,13 +90,21 @@ async function loadCollections() {
       size: 20
     });
     
-    if (response.success && response.data.data) {
-      renderCollections(response.data.data);
-      document.getElementById('total-count').textContent = response.data.total || 0;
+    console.log('Collections response:', response);
+    
+    if (response.success && response.data) {
+      // 直接访问response.data，不是response.data.data
+      if (response.data.data && Array.isArray(response.data.data)) {
+        renderCollections(response.data.data);
+        document.getElementById('total-count').textContent = response.data.total || 0;
+      } else {
+        listEl.innerHTML = '<div class="empty">暂无收藏</div>';
+      }
     } else {
       listEl.innerHTML = '<div class="empty">暂无收藏</div>';
     }
   } catch (error) {
+    console.error('Load collections error:', error);
     listEl.innerHTML = '<div class="error">加载失败: ' + error.message + '</div>';
   }
 }
