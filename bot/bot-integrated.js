@@ -6,32 +6,16 @@ const { Wechaty } = require('wechaty');
 const axios = require('axios');
 
 // Backend API configuration
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
 
 /**
  * Find or create user by wechat_id
  */
 async function findOrCreateUser(wechat_id) {
   try {
-    // Try to find user by wechat_id
-    const findResponse = await axios.get(`${API_BASE_URL}/api/v1/user/${wechat_id}`, {
-      validateStatus: () => true // Don't throw on 404
-    });
-
-    if (findResponse.status === 200 && findResponse.data.success) {
-      return findResponse.data.data.user_id;
-    }
-
-    // Create new user
-    const createResponse = await axios.post(`${API_BASE_URL}/api/v1/user`, {
-      wechat_id: wechat_id
-    });
-
-    if (createResponse.data.success) {
-      return createResponse.data.user_id;
-    }
-
-    throw new Error('Failed to create user');
+    // 暂时使用简化版本，直接生成user_id
+    // TODO: 实现真实的用户管理系统
+    return `usr_wechat_${wechat_id}`;
   } catch (error) {
     console.error('[Bot] Error finding/creating user:', error.message);
     throw error;
@@ -103,53 +87,80 @@ async function main() {
       }
 
       const contact = msg.from();
-      const wechat_id = contact?.id || null;
+      const wechat_id = contact?.id || 'unknown';
       const text = msg.text();
+      const room = msg.room();
 
-      // Handle URL messages
-      if (msg.type() === Wechaty.Message.Type.URL) {
-        const url = msg.url();
-        console.log(`[Bot] Received URL: ${url} from ${contact?.name()}`);
+      // 忽略群消息，只处理私聊
+      if (room) {
+        return;
+      }
 
+      console.log(`[Bot] Message from ${contact?.name()}: ${text?.substring(0, 50)}...`);
+
+      // 处理帮助命令
+      if (text && (text.includes('帮助') || text.includes('help') || text === '/help')) {
+        await msg.say(`📚 AI 收藏夹机器人使用说明：
+
+1. 发送链接：直接发送网页链接，自动收藏
+2. 发送文本：发送超过10个字符的文本内容，自动收藏
+3. 公众号文章：转发公众号文章，自动收藏
+4. 查询帮助：发送“帮助”或“help”
+
+收藏的内容会自动进行 AI 分析，提取关键词和分类。`);
+        return;
+      }
+
+      // 处理URL类型消息（链接卡片）
+      if (msg.type() === bot.Message.Type.Url) {
         try {
-          // Get or create user
-          const user_id = await findOrCreateUser(wechat_id);
+          const urlLink = await msg.toUrlLink();
+          const url = urlLink.url();
+          const title = urlLink.title();
+          const description = urlLink.description();
+          
+          console.log(`[Bot] Received URL card: ${title}`);
+          console.log(`[Bot] URL: ${url}`);
 
-          // Submit collection (URL as text, with URL metadata)
-          const result = await submitCollection(user_id, `链接: ${url}`, url);
+          const user_id = await findOrCreateUser(wechat_id);
+          const collectionText = `${title}\n${description || ''}`;
+          
+          const result = await submitCollection(user_id, collectionText, url);
 
           if (result.success) {
-            await msg.say(`✅ 收藏成功！\n收藏ID: ${result.collect_id}\nAI 分析中...`);
+            await msg.say(`✅ 收藏成功！\n📝 标题: ${title}\n🆔 ID: ${result.collect_id}\n🤖 AI 分析中...`);
           } else {
             await msg.say(`❌ 收藏失败: ${result.error}`);
           }
         } catch (error) {
-          console.error('[Bot] Error processing URL:', error);
+          console.error('[Bot] Error processing URL card:', error);
           await msg.say(`❌ 处理失败: ${error.message}`);
         }
         return;
       }
 
-      // Handle text messages (if text is long enough, treat as collection)
-      if (msg.type() === Wechaty.Message.Type.Text && text && text.trim().length >= 10) {
-        // Check if message contains URL
+      // 处理文本消息（含链接或长文本）
+      if (msg.type() === bot.Message.Type.Text && text && text.trim().length >= 10) {
+        // 检查是否包含URL
         const urlMatch = text.match(/https?:\/\/[^\s]+/);
         const url = urlMatch ? urlMatch[0] : null;
-        const cleanText = text.replace(/https?:\/\/[^\s]+/g, '').trim();
+        let cleanText = text.replace(/https?:\/\/[^\s]+/g, '').trim();
 
-        // Only process if text is meaningful (not just URL)
+        // 如果有URL但没有文本，使用URL作为文本
+        if (cleanText.length < 10 && url) {
+          cleanText = `链接: ${url}`;
+        }
+
+        // 只处理有意义的文本
         if (cleanText.length >= 10) {
           console.log(`[Bot] Received text collection from ${contact?.name()}: ${cleanText.substring(0, 50)}...`);
 
           try {
-            // Get or create user
             const user_id = await findOrCreateUser(wechat_id);
-
-            // Submit collection
             const result = await submitCollection(user_id, cleanText, url);
 
             if (result.success) {
-              await msg.say(`✅ 收藏成功！\n收藏ID: ${result.collect_id}\nAI 分析中...`);
+              await msg.say(`✅ 收藏成功！\n🆔 ID: ${result.collect_id}\n🤖 AI 分析中...`);
             } else {
               await msg.say(`❌ 收藏失败: ${result.error}`);
             }
@@ -159,17 +170,6 @@ async function main() {
           }
         }
         return;
-      }
-
-      // Handle other message types or help command
-      if (text && (text.includes('帮助') || text.includes('help') || text === '/help')) {
-        await msg.say(`📚 AI 收藏夹机器人使用说明：
-
-1. 发送链接：直接发送网页链接，自动收藏
-2. 发送文本：发送超过10个字符的文本内容，自动收藏
-3. 查询帮助：发送"帮助"或"help"
-
-收藏的内容会自动进行 AI 分析，提取关键词和分类。`);
       }
 
     } catch (error) {
