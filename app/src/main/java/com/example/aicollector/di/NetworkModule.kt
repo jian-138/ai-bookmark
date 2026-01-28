@@ -19,7 +19,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
     
-    private const val BASE_URL = "https://api.example.com" // TODO: Replace with actual API URL
+    private const val BASE_URL = "https://ai-bookmark-production.up.railway.app"
     private const val TIMEOUT_SECONDS = 30L
     
     @Provides
