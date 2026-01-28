@@ -1,0 +1,28 @@
+﻿/* content.css - Styles for content script */
+#ai-bookmark-float-button {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  cursor: pointer;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  opacity: 1;
+  animation: bounceIn 0.3s ease;
+}
+#ai-bookmark-float-button:hover { transform: scale(1.1); }
+@keyframes bounceIn { 0% { opacity: 0; transform: scale(0.3); } 100% { transform: scale(1); } }
+.ai-bookmark-toast {
+  position: fixed; top: 20px; right: 20px;
+  padding: 16px 24px; background: white;
+  border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  z-index: 1000000; opacity: 0; transition: all 0.3s ease;
+}
+.ai-bookmark-toast.show { opacity: 1; transform: translateY(0); }
+.ai-bookmark-toast-success { border-left: 4px solid #10b981; }
+.ai-bookmark-toast-error { border-left: 4px solid #ef4444; }
