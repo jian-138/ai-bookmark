@@ -1,59 +1,235 @@
-# ai/analyze.py
 import os
 import requests
-from dotenv import load_dotenv
+import json
+import re
 
-load_dotenv()
+API_KEY = os.getenv("SILICONFLOW_API_KEY")
+MODEL = os.getenv("SILICONFLOW_MODEL", "Qwen/QwQ-32B")
+ENDPOINT = os.getenv("SILICONFLOW_ENDPOINT", "https://api.siliconflow.cn/v1/chat/completions")
 
-SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "").strip()
-SILICONFLOW_ENDPOINT = os.getenv("SILICONFLOW_ENDPOINT", "https://api.siliconflow.cn/v1/chat/completions").strip()
-SILICONFLOW_MODEL = os.getenv("SILICONFLOW_MODEL", "Qwen/QwQ-32B")
-
-# 调用失败返回的固定数据
-FIXED_RESULT = {
+FALLBACK = {
+    "success": True,
     "keywords": ["人工智能", "教育", "机器学习"],
     "category": "科技,教育",
     "summary": "AI 通过个性化路径提升教育效果。",
-    "confidence": 0.91
+    "confidence": 0.91,
+    "article_type": "其他",
+    "error": None
 }
 
-def analyze_text(text: str) -> tuple[dict, str | None]:
-    """调用硅基流动 Chat Completions API 分析文本"""
-    if not SILICONFLOW_API_KEY:
-        return FIXED_RESULT, "API Key 未配置"
+# ---- Schema 修复 ----
+def fix_schema(data: dict):
+    try:
+        conf = float(data.get("confidence", 0.9))
+    except:
+        conf = 0.9
+
+    return {
+        "success": True,
+        "keywords": data.get("keywords", []),
+        "category": data.get("category", ""),
+        "summary": data.get("summary", ""),
+        "confidence": conf,
+        "article_type": data.get("article_type", "其他"),
+        "error": None
+    }
+
+
+def extract_json(text: str):
+    """
+    强鲁棒 JSON 提取（适配模型乱输出 / 半 JSON / 注释 / markdown）
+    """
+    try:
+        print("==== RAW MODEL OUTPUT START ====")
+        print(repr(text[:2000]))
+        print("==== RAW MODEL OUTPUT END ====")
+
+        # 基础清洗
+        text = text.strip()
+        text = re.sub(r"```json|```", "", text)
+        text = text.replace("“", '"').replace("”", '"')
+
+        # 1️⃣ 尝试直接解析完整 JSON
+        try:
+            return json.loads(text)
+        except:
+            pass
+
+        # 2️⃣ 尝试提取第一个完整 JSON 对象 {...}
+        match = re.search(r"\{[\s\S]*\}", text)
+        if match:
+            return json.loads(match.group(0))
+
+        # 3️⃣ 模型只返回字段体（没有外层 {}）
+        if '"keywords"' in text:
+            start = text.find('"keywords"')
+            body = text[start:]
+
+            # 清理尾部无效字符
+            body = body.strip()
+            body = re.sub(r",\s*$", "", body)
+
+            fixed = "{" + body + "}"
+
+            print("==== FIXED JSON BODY ====")
+            print(fixed)
+            print("==========================")
+
+            return json.loads(fixed)
+
+        print("❌ JSON 提取失败")
+        return None
+
+    except Exception as e:
+        print("❌ JSON 解析异常:", str(e))
+        return None
+
+
+
+# ---- Prompt ----
+AI_ANALYZE_PROMPT = """
+你是一名专业中文文本分析模型。
+必须严格返回 JSON，不允许输出解释或多余文本。
+
+任务：
+1. keywords：3–8 个关键词数组
+2. category：1–3 个分类标签（字符串）
+3. summary：15–40 字摘要
+4. confidence：0–1 可信度
+
+返回格式：
+{
+  "keywords": [],
+  "category": "",
+  "summary": "",
+  "confidence": 0.0
+}
+"""
+
+WECHAT_PROMPT_TEMPLATE = """
+请分析以下微信公众号文章，并只返回 JSON：
+
+标题：
+{title}
+
+正文：
+{content}
+
+要求返回：
+{
+  "keywords": ["词1","词2","词3","词4","词5"],
+  "category": "分类1,分类2",
+  "summary": "100字以内摘要，包含核心观点",
+  "article_type": "技术/资讯/观点/教程/其他",
+  "confidence": 0.0
+}
+"""
+
+print(">>> call_siliconflow NEW VERSION LOADED")
+
+def call_siliconflow(prompt: str):
+    if not API_KEY:
+        return FALLBACK, "未设置 API Key"
 
     headers = {
-        "Authorization": f"Bearer {SILICONFLOW_API_KEY}",
+        "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": SILICONFLOW_MODEL,
+        "model": MODEL,
         "messages": [
-            {"role": "user", "content": f"请提取文本的关键词、分类和摘要：{text}"}
+            {"role": "system", "content": "你必须严格只输出 JSON，不允许输出解释或多余文本"},
+            {"role": "user", "content": prompt}
         ],
-        "stream": False
+        "temperature": 0.2,
     }
 
     try:
-        response = requests.post(SILICONFLOW_ENDPOINT, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        resp = requests.post(ENDPOINT, headers=headers, json=payload, timeout=90)
 
-        # 解析模型返回内容（假设返回 choices[0].message.content）
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        # 简单解析：假设模型返回 JSON 字符串
-        import json
-        try:
-            result = json.loads(content)
-        except Exception:
-            result = FIXED_RESULT
-            return result, "解析 API 返回内容失败，使用固定数据"
+        print("=== SiliconFlow Raw Response ===")
+        print(resp.text[:1200])
+        print("================================")
 
-        # 检查必要字段
-        if not all(k in result for k in ["keywords", "category", "summary", "confidence"]):
-            return FIXED_RESULT, "API 返回数据不完整"
+        if resp.status_code != 200:
+            return FALLBACK, f"硅基流动错误: {resp.status_code} {resp.text}"
 
-        return result, None
+        data = resp.json()
+        raw = data["choices"][0]["message"]["content"]
+
+        parsed = extract_json(raw)
+
+        if not parsed:
+            return FALLBACK, f"JSON 解析失败，原始输出: {raw[:300]}"
+
+        fixed = fix_schema(parsed)
+        return fixed, None
+
     except Exception as e:
-        return FIXED_RESULT, f"调用硅基流动 API 失败: {str(e)}"
+        return FALLBACK, f"调用异常: {str(e)}"
+
+
+def analyze_text(text: str):
+    prompt = AI_ANALYZE_PROMPT + "\n\n文本内容：\n" + text
+    return call_siliconflow(prompt)
+
+
+from ai.ai_processor import preprocess_article_content
+
+def analyze_wechat_article(content: str, title: str):
+    try:
+        processed_content = preprocess_article_content(content)
+        prompt = f"""
+你是一个信息分析助手，请从公众号文章中提取：
+- keywords (数组)
+- category (字符串)
+- summary (字符串)
+- confidence (0-1)
+
+只返回 JSON，不要输出其他文字。
+
+标题：{title}
+正文：{processed_content[:3000]}
+"""
+
+        raw, call_err = call_siliconflow(prompt)
+
+        print("WECHAT RAW MODEL OUTPUT =")
+        print(raw)
+
+        if call_err:
+            return None, f"模型调用失败: {call_err}"
+
+        if not raw:
+            return None, "模型无返回"
+
+        # 🚑 如果模型层已经返回 dict，直接用
+        if isinstance(raw, dict):
+            return raw, None
+
+        # 🚑 如果是字符串才走 JSON 清洗
+        if isinstance(raw, str):
+            raw = raw.strip()
+
+            if raw.startswith("```"):
+                raw = raw.strip("```").strip("json").strip()
+
+            start = raw.find("{")
+            end = raw.rfind("}")
+
+            if start == -1 or end == -1:
+                return None, "模型返回非 JSON"
+
+            raw = raw[start:end+1]
+
+            try:
+                data = json.loads(raw)
+                return data, None
+            except Exception as e:
+                return None, f"JSON解析失败: {str(e)}"
+
+        return None, "未知模型返回格式"
+
+    except Exception as e:
+        return None, f"analyze_wechat_article 内部错误: {str(e)}"
