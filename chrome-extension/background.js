@@ -53,7 +53,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
-  
+
   if (request.action === 'syncOfflineQueue') {
     syncOfflineQueue()
       .then(() => sendResponse({ success: true }))
