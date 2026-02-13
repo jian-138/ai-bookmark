@@ -47,6 +47,14 @@
     </div>
     
     <div class="footer">
+      <div class="footer-actions">
+        <button id="weekly-report-btn" class="weekly-report-btn" title="查看周报">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+          </svg>
+          周报
+        </button>
+      </div>
       <p class="stats">
         <span id="total-count">0</span> 条收藏
         <span id="offline-count" style="display: none;"> · <span id="offline-num">0</span> 条待同步</span>
@@ -54,6 +62,31 @@
     </div>
   </div>
   
+  <!-- 周报页面 -->
+  <div id="weekly-report-page" class="page" style="display: none;">
+    <div class="header">
+      <div class="header-title">
+        <button id="back-to-main" class="back-btn" title="返回主页面">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+          </svg>
+        </button>
+        <h2>📊 我的周报</h2>
+      </div>
+      <div class="header-actions">
+        <button id="generate-report-btn" class="icon-btn" title="生成本周周报">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <div id="weekly-reports-container" class="weekly-reports-container">
+      <!-- 周报内容将动态加载到这里 -->
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

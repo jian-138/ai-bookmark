@@ -1,0 +1,1331 @@
+# main.py
+import os
+import json
+import asyncio
+from fastapi import FastAPI, HTTPException, Header
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.requests import Request
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from typing import Optional, List
+from datetime import datetime
+import uuid
+
+from ai.analyze import analyze_text, analyze_wechat_article
+from ai.cache import get_or_analyze_article
+
+load_dotenv()
+
+app = FastAPI(title="AI 收藏夹服务", version="0.2")
+
+# --------- CORS 配置 ----------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 生产环境应限制具体域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    # 允许携带凭证信息
+    allow_origin_regex=".*"
+)
+
+# --------- 请求与响应模型 ----------
+# 用户认证
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    success: bool
+    token: Optional[str] = None
+    user_id: Optional[str] = None
+    message: Optional[str] = None
+
+# 收藏相关
+class CollectionRequest(BaseModel):
+    user_id: str
+    original_text: str
+    url: Optional[str] = None
+
+class CollectionResponse(BaseModel):
+    success: bool
+    collect_id: str
+    created_at: str
+    message: str
+
+class CollectionItem(BaseModel):
+    collect_id: str
+    user_id: str
+    original_text: str
+    url: Optional[str] = None
+    ai_keywords: Optional[List[str]] = None
+    ai_category: Optional[str] = None
+    summary: Optional[str] = None
+    ai_confidence: Optional[float] = None
+    status: str
+    created_at: str
+    updated_at: str
+
+class CollectionDetailResponse(BaseModel):
+    success: bool
+    data: Optional[CollectionItem] = None
+    message: Optional[str] = None
+
+class CollectionListResponse(BaseModel):
+    success: bool
+    data: List[CollectionItem]
+    total: int
+    page: int
+    size: int
+
+class Metadata(BaseModel):
+    user_id: str
+    url: str | None = None
+
+class AnalyzeRequest(BaseModel):
+    collect_id: str
+    text: str
+    metadata: Metadata
+
+class AnalyzeResponse(BaseModel):
+    success: bool
+    keywords: list[str] | None = None
+    category: str | None = None
+    summary: str | None = None
+    confidence: float | None = None
+    error: str | None = None
+
+FALLBACK = {
+    "success": True,
+    "keywords": ["人工智能", "教育", "机器学习"],
+    "category": "科技,教育",
+    "summary": "AI 通过个性化路径提升教育效果。",
+    "confidence": 0.91,
+}
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def local_analyze(req: AnalyzeRequest):
+    return AnalyzeResponse(
+        success=True,
+        keywords=["人工智能", "教育"],
+        category="科技,教育",
+        summary="AI 通过个性化路径提升教育效果。",
+        confidence=0.91,
+        error=None
+    )
+
+@app.post("/internal/ai/analyze", response_model=AnalyzeResponse)
+async def internal_analyze(req: AnalyzeRequest):
+    print(">>> INTERNAL ANALYZE HIT")
+
+    url = (req.metadata.url or "").strip()
+    print("URL =", url)
+
+    err = None
+    raw_result = None
+
+    try:
+        # 选择分析函数
+        if "mp.weixin.qq.com" in url:
+            print("MODE = WECHAT ARTICLE")
+            raw_result, err = get_or_analyze_article(
+                url=url,
+                content=req.text,
+                title=req.collect_id,
+                analyze_wechat_article=analyze_wechat_article
+            )
+        else:
+            print("MODE = NORMAL TEXT")
+            raw_result, err = analyze_text(req.text)
+
+        print("RAW RESULT =", raw_result)
+
+        # 强制防御：保证 result 是 dict
+        if isinstance(raw_result, str):
+            # 清理 ```json ``` 包裹
+            raw_result = raw_result.strip()
+            if raw_result.startswith("```"):
+                raw_result = raw_result.strip("```").strip("json").strip()
+
+            try:
+                raw_result = json.loads(raw_result)
+            except Exception as e:
+                print("JSON PARSE FAILED:", e)
+                raw_result = FALLBACK
+
+        if not isinstance(raw_result, dict):
+            raw_result = FALLBACK
+
+        result = raw_result
+
+    except Exception as e:
+        print("INTERNAL ERROR:", e)
+        return AnalyzeResponse(
+            success=True,
+            keywords=FALLBACK["keywords"],
+            category=FALLBACK["category"],
+            summary=FALLBACK["summary"],
+            confidence=FALLBACK["confidence"],
+            error=f"内部调用异常: {str(e)}"
+        )
+
+    # fallback 兜底
+    if err:
+        print("MODEL ERROR =", err)
+        return AnalyzeResponse(
+            success=True,
+            keywords=result.get("keywords", FALLBACK["keywords"]),
+            category=result.get("category", FALLBACK["category"]),
+            summary=result.get("summary", FALLBACK["summary"]),
+            confidence=result.get("confidence", FALLBACK["confidence"]),
+            error=err
+        )
+
+    # 成功返回
+    return AnalyzeResponse(
+        success=True,
+        keywords=result.get("keywords", FALLBACK["keywords"]),
+        category=result.get("category", FALLBACK["category"]),
+        summary=result.get("summary", FALLBACK["summary"]),
+        confidence=result.get("confidence", FALLBACK["confidence"]),
+        error=None
+    )
+
+# 提供简易可视化入口页面
+@app.get("/")
+async def root(request: Request):
+    return HTMLResponse(content=get_index_page(request=request))
+
+
+@app.get("/mobile")
+async def mobile_page(request: Request):
+    return HTMLResponse(content=get_mobile_page(request=request))
+
+
+def get_index_page(request=None):
+    base_url = request.url.hostname if request else "192.168.41.132"
+    return '''
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI书签收藏助手</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f5f5;
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background: #4a90e2;
+      color: white;
+      padding: 30px 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 1.8em;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 1em;
+      opacity: 0.9;
+      margin: 0;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .features {
+      margin-bottom: 30px;
+    }
+
+    .feature {
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+    }
+
+    .feature-icon {
+      font-size: 1.5em;
+      margin-right: 12px;
+      color: #4a90e2;
+    }
+
+    .feature-text {
+      font-size: 1em;
+      color: #333;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      display: block;
+      padding: 14px;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .btn-primary {
+      background: #4a90e2;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #357ae8;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .collection-section {
+      margin: 25px 0;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border: 1px solid #eee;
+    }
+
+    .collection-section h3 {
+      margin: 0 0 15px 0;
+      color: #333;
+      font-size: 1.2em;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 20px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 0.9em;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      
+      .content {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>AI书签收藏助手</h1>
+      <p>智能收藏 · AI分析</p>
+    </div>
+    
+    <div class="content">
+      <div class="features">
+        <div class="feature">
+          <span class="feature-icon">🔖</span>
+          <span class="feature-text">一键收藏网页内容</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">🤖</span>
+          <span class="feature-text">AI自动分析提取关键词</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">🌐</span>
+          <span class="feature-text">支持微信公众号文章</span>
+        </div>
+      </div>
+      
+      <div class="btn-group">
+        <a href="http://" + base_url + ":8000/docs" class="btn btn-primary">查看API文档</a>
+        <a href="javascript:void(0)" class="btn btn-secondary" onclick="alert('Chrome扩展位于项目根目录的chrome-extension文件夹中，按照README.md进行安装')">安装Chrome扩展</a>
+      </div>
+      
+      <div class="collection-section">
+        <h3>📝 快速收藏</h3>
+        <textarea id="collectionText" placeholder="粘贴您想收藏的内容..." rows="5" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin: 10px 0; font-size: 1em;"></textarea>
+        <input type="hidden" id="userId" value="usr_default_user">
+        <button onclick="submitCollection()" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1em; margin-bottom: 10px;">📤 提交收藏</button>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>访问地址: <span id="currentUrl"></span></p>
+    </div>
+  </div>
+  
+  <script>
+    async function submitCollection() {
+      const textArea = document.getElementById('collectionText');
+      const userIdInput = document.getElementById('userId');
+      
+      const content = textArea.value.trim();
+      
+      if (!content) {
+        alert('请输入要收藏的内容');
+        return;
+      }
+      
+      if (content.length < 10) {
+        alert('内容长度至少需要10个字符');
+        return;
+      }
+      
+      const userId = userIdInput.value || 'usr_default_user';
+      
+      try {
+        // 显示提交中提示
+        const submitBtn = document.querySelector('button[onclick="submitCollection()"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = '提交中...';
+        submitBtn.disabled = true;
+        
+        // 使用相对路径避免跨域问题，提高微信内置浏览器兼容性
+        const response = await fetch('/api/v1/collect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            original_text: content
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert('收藏成功！内容已提交AI分析');
+          textArea.value = ''; // 清空输入框
+        } else {
+          alert('收藏失败: ' + (result.message || '未知错误')); 
+        }
+      } catch (error) {
+        console.error('提交收藏时出错:', error);
+        // 在微信内置浏览器中提供更友好的错误信息
+        alert('提交失败: ' + (error.message || '网络错误，请稍后重试'));
+      } finally {
+        // 恢复按钮状态
+        const submitBtn = document.querySelector('button[onclick="submitCollection()"]');
+        submitBtn.textContent = '📤 提交收藏';
+        submitBtn.disabled = false;
+      }
+    }
+  </script>
+  
+  <script>
+    // 动态显示当前访问的URL
+    document.addEventListener('DOMContentLoaded', function() {
+      const currentUrlSpan = document.getElementById('currentUrl');
+      if(currentUrlSpan) {
+        currentUrlSpan.textContent = window.location.href;
+      }
+      
+      const currentUrlMobileSpan = document.getElementById('currentUrlMobile');
+      if(currentUrlMobileSpan) {
+        currentUrlMobileSpan.textContent = window.location.href;
+      }
+    });
+  </script>
+</body>
+</html>
+    '''
+
+def get_mobile_page(request=None):
+    base_url = request.url.hostname if request else "192.168.41.132"
+    return '''
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI书签收藏助手 - 移动端</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f5f5;
+      min-height: 100vh;
+      padding: 15px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background: #4a90e2;
+      color: white;
+      padding: 25px 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 1.6em;
+      margin-bottom: 5px;
+    }
+
+    .header p {
+      font-size: 1em;
+      opacity: 0.9;
+      margin: 0;
+    }
+
+    .content {
+      padding: 25px 20px;
+    }
+
+    .feature-list {
+      margin: 20px 0;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .feature-item:last-child {
+      border-bottom: none;
+    }
+
+    .feature-icon {
+      font-size: 1.4em;
+      margin-right: 12px;
+      color: #4a90e2;
+    }
+
+    .feature-text {
+      font-size: 1em;
+      color: #333;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 25px 0;
+    }
+
+    .btn {
+      display: block;
+      padding: 14px;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .btn-primary {
+      background: #4a90e2;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #357ae8;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .info-section {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .info-title {
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .info-item {
+      padding: 5px 0;
+      font-size: 0.95em;
+      color: #555;
+    }
+
+    .highlight {
+      background: #e3f2fd;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 20px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 0.9em;
+    }
+
+    @media (max-width: 600px) {
+      .content {
+        padding: 20px 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📱 移动端访问</h1>
+      <p>AI书签收藏助手</p>
+    </div>
+    
+    <div class="content">
+      <div class="feature-list">
+        <div class="feature-item">
+          <span class="feature-icon">🔖</span>
+          <span class="feature-text">一键收藏网页内容</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">🤖</span>
+          <span class="feature-text">AI自动分析提取关键词</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">🌐</span>
+          <span class="feature-text">支持微信公众号文章</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">📱</span>
+          <span class="feature-text">多端同步访问</span>
+        </div>
+      </div>
+      
+      <div class="btn-group">
+        <a href="http://" + base_url + ":8000/docs" class="btn btn-primary">查看API文档</a>
+        <a href="javascript:void(0)" class="btn btn-secondary" onclick="alert('Chrome扩展位于项目根目录的chrome-extension文件夹中，按照README.md进行安装')">安装Chrome扩展</a>
+      </div>
+      
+      <div class="collection-section">
+        <h3>📝 快速收藏</h3>
+        <textarea id="collectionText" placeholder="粘贴您想收藏的内容..." rows="5" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin: 10px 0; font-size: 1em;"></textarea>
+        <input type="hidden" id="userId" value="usr_mobile_user">
+        <button onclick="submitCollection()" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1em; margin-bottom: 10px;">📤 提交收藏</button>
+      </div>
+      
+      <div class="info-section">
+        <div class="info-title">使用说明</div>
+        <div class="info-item">1. 确保设备与服务在同一网络</div>
+        <div class="info-item">2. 访问地址: <span class="highlight"><span id="currentUrlMobile"></span></span></div>
+        <div class="info-item">3. 测试账号: test / test123</div>
+        <div class="info-item">4. 查看收藏内容和AI分析</div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>将此页面添加到主屏幕以便快速访问</p>
+    </div>
+  </div>
+  
+  <script>
+    async function submitCollection() {
+      const textArea = document.getElementById('collectionText');
+      const userIdInput = document.getElementById('userId');
+      
+      const content = textArea.value.trim();
+      
+      if (!content) {
+        alert('请输入要收藏的内容');
+        return;
+      }
+      
+      if (content.length < 10) {
+        alert('内容长度至少需要10个字符');
+        return;
+      }
+      
+      const userId = userIdInput.value || 'usr_mobile_user';
+      
+      try {
+        // 显示提交中提示
+        const submitBtn = document.querySelector('button[onclick="submitCollection()"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = '提交中...';
+        submitBtn.disabled = true;
+        
+        // 使用相对路径避免跨域问题，提高微信内置浏览器兼容性
+        const response = await fetch('/api/v1/collect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            original_text: content
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert('收藏成功！内容已提交AI分析');
+          textArea.value = ''; // 清空输入框
+        } else {
+          alert('收藏失败: ' + (result.message || '未知错误'));
+        }
+      } catch (error) {
+        console.error('提交收藏时出错:', error);
+        // 在微信内置浏览器中提供更友好的错误信息
+        alert('提交失败: ' + (error.message || '网络错误，请稍后重试'));
+      } finally {
+        // 恢复按钮状态
+        const submitBtn = document.querySelector('button[onclick="submitCollection()"]');
+        submitBtn.textContent = '📤 提交收藏';
+        submitBtn.disabled = false;
+      }
+    }
+  </script>
+  
+  <script>
+    // 动态显示当前访问的URL
+    document.addEventListener('DOMContentLoaded', function() {
+      const currentUrlSpan = document.getElementById('currentUrl');
+      if(currentUrlSpan) {
+        currentUrlSpan.textContent = window.location.href;
+      }
+      
+      const currentUrlMobileSpan = document.getElementById('currentUrlMobile');
+      if(currentUrlMobileSpan) {
+        currentUrlMobileSpan.textContent = window.location.href;
+      }
+    });
+  </script>
+</body>
+</html>
+    '''
+
+
+@app.get("/wechat")
+async def wechat_page(request: Request):
+    response = HTMLResponse(content=get_wechat_page(request=request))
+    # 设置额外的安全头，帮助微信浏览器正确处理
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+
+
+def get_wechat_page(request=None):
+    base_url = request.url.hostname if request else "192.168.41.132"
+    return '''
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI书签收藏助手 - 微信版</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f5f5;
+      min-height: 100vh;
+      padding: 15px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background: #07c160; /* 微信绿色 */
+      color: white;
+      padding: 25px 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 1.6em;
+      margin-bottom: 5px;
+    }
+
+    .header p {
+      font-size: 1em;
+      opacity: 0.9;
+      margin: 0;
+    }
+
+    .content {
+      padding: 25px 20px;
+    }
+
+    .warning {
+      background: #fff6e6;
+      border-left: 4px solid #faad14;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .warning p {
+      margin: 5px 0;
+      color: #d46b08;
+      font-size: 0.95em;
+    }
+
+    .feature-list {
+      margin: 20px 0;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .feature-item:last-child {
+      border-bottom: none;
+    }
+
+    .feature-icon {
+      font-size: 1.4em;
+      margin-right: 12px;
+      color: #07c160;
+    }
+
+    .feature-text {
+      font-size: 1em;
+      color: #333;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 25px 0;
+    }
+
+    .btn {
+      display: block;
+      padding: 14px;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .btn-primary {
+      background: #07c160; /* 微信绿色 */
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #06a954;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #07c160;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .info-section {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .info-title {
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #333;
+      display: flex;
+      align-items: center;
+    }
+
+    .info-title::before {
+      content: "ℹ️ ";
+      margin-right: 5px;
+    }
+
+    .info-item {
+      padding: 5px 0;
+      font-size: 0.95em;
+      color: #555;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .info-item::before {
+      content: "• ";
+      margin-right: 5px;
+      color: #07c160;
+    }
+
+    .collection-form {
+      margin: 25px 0;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border: 1px solid #eee;
+    }
+
+    .collection-form h3 {
+      margin: 0 0 15px 0;
+      color: #333;
+      font-size: 1.2em;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 20px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 0.9em;
+    }
+
+    @media (max-width: 600px) {
+      .content {
+        padding: 20px 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📱 微信收藏助手</h1>
+      <p>AI驱动的智能收藏服务</p>
+    </div>
+    
+    <div class="content">
+      <div class="warning">
+        <p>⚠️ 重要提醒</p>
+        <p>微信内置浏览器功能受限，请点击右上角选择「在浏览器中打开」</p>
+      </div>
+      
+      <div class="feature-list">
+        <div class="feature-item">
+          <span class="feature-icon">🌐</span>
+          <span class="feature-text">微信公众号文章智能收藏</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">🤖</span>
+          <span class="feature-text">AI自动分析提取关键词</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">📋</span>
+          <span class="feature-text">智能分类与内容摘要</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">💾</span>
+          <span class="feature-text">云端存储与管理</span>
+        </div>
+      </div>
+      
+      <div class="btn-group">
+        <a href="/" class="btn btn-primary">🏠 返回首页</a>
+        <a href="#" onclick="alert('请在微信中点击右上角菜单，选择“在浏览器中打开”以获得完整功能体验')" class="btn btn-secondary">📱 在浏览器中打开</a>
+        <a href="/docs" class="btn btn-secondary">📄 API文档</a>
+      </div>
+      
+      <div class="collection-form">
+        <h3>📝 快速收藏</h3>
+        <textarea id="collectionText" placeholder="在此粘贴您复制的文章内容..." rows="6" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin: 10px 0; font-size: 1em;"></textarea>
+        <input type="hidden" id="user_id" value="usr_wechat_user">
+        <button onclick="submitCollection()" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1em; margin-bottom: 10px;">📤 提交收藏</button>
+      </div>
+      
+      <div class="info-section">
+        <div class="info-title">收藏流程</div>
+        <div class="info-item">在微信公众号文章中长按选中内容并复制</div>
+        <div class="info-item">保存此页面或记录网址方便返回</div>
+        <div class="info-item">点击上方按钮前往收藏页面</div>
+        <div class="info-item">登录并提交复制的内容完成收藏</div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>AI书签收藏助手 v1.0</p>
+    </div>
+  </div>
+  
+  <script>
+    async function submitCollection() {
+      const textArea = document.getElementById('collectionText');
+      const userIdInput = document.getElementById('user_id');
+      
+      const content = textArea.value.trim();
+      
+      if (!content) {
+        alert('请输入要收藏的内容');
+        return;
+      }
+      
+      if (content.length < 10) {
+        alert('内容长度至少需要10个字符');
+        return;
+      }
+      
+      const userId = userIdInput.value || 'usr_wechat_user';
+      
+      try {
+        // 显示提交中提示
+        const submitBtn = document.querySelector('button[onclick="submitCollection()"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = '提交中...';
+        submitBtn.disabled = true;
+        
+        // 使用相对路径避免跨域问题，提高微信内置浏览器兼容性
+        const response = await fetch('/api/v1/collect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            original_text: content
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert('收藏成功！内容已提交AI分析');
+          textArea.value = ''; // 清空输入框
+        } else {
+          alert('收藏失败: ' + (result.message || '未知错误'));
+        }
+      } catch (error) {
+        console.error('提交收藏时出错:', error);
+        // 在微信内置浏览器中提供更友好的错误信息
+        alert('提交失败: ' + (error.message || '网络错误，请稍后重试'));
+      } finally {
+        // 恢复按钮状态
+        const submitBtn = document.querySelector('button[onclick="submitCollection()"]');
+        submitBtn.textContent = '📤 提交收藏';
+        submitBtn.disabled = false;
+      }
+    }
+  </script>
+  
+  <script>
+    // 动态显示当前访问的URL
+    document.addEventListener('DOMContentLoaded', function() {
+      const currentUrlSpan = document.getElementById('currentUrl');
+      if(currentUrlSpan) {
+        currentUrlSpan.textContent = window.location.href;
+      }
+      
+      const currentUrlMobileSpan = document.getElementById('currentUrlMobile');
+      if(currentUrlMobileSpan) {
+        currentUrlMobileSpan.textContent = window.location.href;
+      }
+    });
+  </script>
+</body>
+</html>
+    '''
+
+# --------- 内存存储（临时方案） ----------
+collections_storage = []  # 临时存储收藏列表
+
+# --------- 移动端 API ----------
+# 用户登录
+@app.post("/api/v1/auth/login", response_model=LoginResponse)
+async def login(req: LoginRequest):
+    """用户登录接口（测试版）"""
+    # TODO: 连接真实的用户认证系统
+    if req.username == "test" and req.password == "test123":
+        return LoginResponse(
+            success=True,
+            token="test_token_" + str(uuid.uuid4()),
+            user_id="usr_" + str(uuid.uuid4()),
+            message="登录成功"
+        )
+    else:
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+# 提交收藏（同步）
+@app.post("/api/v1/collect", response_model=CollectionResponse, status_code=201)
+async def submit_collection(req: CollectionRequest, authorization: Optional[str] = Header(None)):
+    """提交收藏接口"""
+    # 校验文本长度
+    if len(req.original_text.strip()) < 10:
+        raise HTTPException(status_code=400, detail="TEXT_TOO_SHORT: 文本长度不足10个字符")
+    
+    # 生成收藏ID
+    collect_id = "col_" + str(uuid.uuid4())
+    created_at = datetime.utcnow().isoformat() + "Z"
+    updated_at = created_at
+    
+    # 准备AI分析请求
+    analyze_req = AnalyzeRequest(
+        collect_id=collect_id,
+        text=req.original_text,
+        metadata=Metadata(user_id=req.user_id, url=req.url or "")
+    )
+    
+    # 调用AI分析功能
+    try:
+        analyze_resp = await internal_analyze(analyze_req)
+        
+        ai_keywords = analyze_resp.keywords or ["AI", "测试"]
+        ai_category = analyze_resp.category or "科技"
+        summary = analyze_resp.summary or req.original_text[:50] + "..."
+        ai_confidence = analyze_resp.confidence or 0.85
+    except Exception as e:
+        # 如果AI分析失败，使用默认值
+        ai_keywords = ["AI", "测试"]
+        ai_category = "科技"
+        summary = req.original_text[:50] + "..."
+        ai_confidence = 0.85
+    
+    # 创建收藏项
+    collection_item = {
+        "collect_id": collect_id,
+        "user_id": req.user_id,
+        "original_text": req.original_text,
+        "url": req.url,
+        "ai_keywords": ai_keywords,
+        "ai_category": ai_category,
+        "summary": summary,
+        "ai_confidence": ai_confidence,
+        "status": "ANALYZED",
+        "created_at": created_at,
+        "updated_at": updated_at
+    }
+    
+    # 存储到内存
+    collections_storage.insert(0, collection_item)  # 插入到列表开头
+    
+    # TODO: 存储到数据库
+    # TODO: 触发AI分析异步任务
+    
+    return CollectionResponse(
+        success=True,
+        collect_id=collect_id,
+        created_at=created_at,
+        message="收藏成功，已提交 AI 分析"
+    )
+
+
+# 后台异步收藏（支持移动端后台运行）
+@app.post("/api/v1/collect-async", status_code=202)
+async def submit_collection_async(req: CollectionRequest, authorization: Optional[str] = Header(None)):
+    """异步提交收藏，立即返回响应，后台处理AI分析"""
+    # 校验文本长度
+    if len(req.original_text.strip()) < 10:
+        raise HTTPException(status_code=400, detail="TEXT_TOO_SHORT: 文本长度不足10个字符")
+    
+    # 生成收藏ID
+    collect_id = "col_" + str(uuid.uuid4())
+    created_at = datetime.utcnow().isoformat() + "Z"
+    updated_at = created_at
+    
+    # 创建收藏项（初始状态）
+    collection_item = {
+        "collect_id": collect_id,
+        "user_id": req.user_id,
+        "original_text": req.original_text,
+        "url": req.url,
+        "ai_keywords": [],  # 初始为空，后续填充
+        "ai_category": "",
+        "summary": "AI分析中...",
+        "ai_confidence": 0.0,
+        "status": "PENDING",
+        "created_at": created_at,
+        "updated_at": updated_at
+    }
+    
+    # 存储到内存
+    collections_storage.insert(0, collection_item)
+    
+    # 启动后台AI分析任务
+    asyncio.create_task(process_collection_async(collect_id, req.original_text, req.url, req.user_id))
+    
+    return {"success": True, "collect_id": collect_id, "created_at": created_at, "message": "收藏已提交，AI分析将在后台进行"}
+
+
+
+async def process_collection_async(collect_id: str, text: str, url: str, user_id: str):
+    """后台异步处理收藏项的AI分析"""
+    try:
+        # 准备AI分析请求
+        analyze_req = AnalyzeRequest(
+            collect_id=collect_id,
+            text=text,
+            metadata=Metadata(user_id=user_id, url=url or "")
+        )
+        
+        # 调用AI分析功能
+        analyze_resp = await internal_analyze(analyze_req)
+        
+        ai_keywords = analyze_resp.keywords or ["AI", "测试"]
+        ai_category = analyze_resp.category or "未分类"
+        summary = analyze_resp.summary or text[:50] + "..."
+        ai_confidence = analyze_resp.confidence or 0.0
+        
+        # 更新收藏项状态
+        for i, item in enumerate(collections_storage):
+            if item["collect_id"] == collect_id:
+                collections_storage[i].update({
+                    "ai_keywords": ai_keywords,
+                    "ai_category": ai_category,
+                    "summary": summary,
+                    "ai_confidence": ai_confidence,
+                    "status": "ANALYZED",
+                    "updated_at": datetime.utcnow().isoformat() + "Z"
+                })
+                break
+        
+    except Exception as e:
+        # 更新失败状态
+        for i, item in enumerate(collections_storage):
+            if item["collect_id"] == collect_id:
+                collections_storage[i].update({
+                    "status": "AI_FAILED",
+                    "summary": f"AI分析失败: {str(e)}",
+                    "updated_at": datetime.utcnow().isoformat() + "Z"
+                })
+                break
+        print(f"AI分析失败 {collect_id}: {str(e)}")
+
+# 查询单条收藏
+@app.get("/api/v1/collect/{collect_id}", response_model=CollectionDetailResponse)
+async def get_collection_detail(collect_id: str, authorization: Optional[str] = Header(None)):
+    """查询单条收藏详情"""
+    # TODO: 从数据库查询
+    # 这里返回模拟数据
+    mock_item = CollectionItem(
+        collect_id=collect_id,
+        user_id="usr_test",
+        original_text="人工智能正在改变教育行业",
+        url="https://example.com",
+        ai_keywords=["AI", "教育"],
+        ai_category="科技,教育",
+        summary="AI推动个性化学习",
+        ai_confidence=0.91,
+        status="ANALYZED",
+        created_at=datetime.utcnow().isoformat() + "Z",
+        updated_at=datetime.utcnow().isoformat() + "Z"
+    )
+    
+    return CollectionDetailResponse(
+        success=True,
+        data=mock_item,
+        message="查询成功"
+    )
+
+# 获取收藏列表
+@app.get("/api/v1/collections", response_model=CollectionListResponse)
+async def get_collections(
+    page: int = 1,
+    size: int = 20,
+    authorization: Optional[str] = Header(None)
+):
+    """获取收藏列表"""
+    # 从内存中获取数据
+    start = (page - 1) * size
+    end = start + size
+    page_items = collections_storage[start:end]
+    
+    return CollectionListResponse(
+        success=True,
+        data=page_items,
+        total=len(collections_storage),
+        page=page,
+        size=size
+    )
+
+# 搜索收藏
+@app.get("/api/v1/collections/search", response_model=CollectionListResponse)
+async def search_collections(
+    query: str,
+    category: Optional[str] = None,
+    authorization: Optional[str] = Header(None)
+):
+    """搜索收藏"""
+    # TODO: 实现真实搜索逻辑
+    return CollectionListResponse(
+        success=True,
+        data=[],
+        total=0,
+        page=1,
+        size=20
+    )
+
+# 删除收藏
+@app.delete("/api/v1/collections/{collect_id}")
+async def delete_collection(collect_id: str, authorization: Optional[str] = Header(None)):
+    """删除收藏"""
+    # TODO: 从数据库删除
+    return {"success": True, "message": "删除成功"}

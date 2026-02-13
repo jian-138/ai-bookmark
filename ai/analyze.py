@@ -2,10 +2,18 @@ import os
 import requests
 import json
 import re
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 API_KEY = os.getenv("SILICONFLOW_API_KEY")
 MODEL = os.getenv("SILICONFLOW_MODEL", "Qwen/QwQ-32B")
 ENDPOINT = os.getenv("SILICONFLOW_ENDPOINT", "https://api.siliconflow.cn/v1/chat/completions")
+
+print(f"API_KEY配置状态: {'已设置' if API_KEY else '未设置'}")
+print(f"MODEL配置: {MODEL}")
+print(f"ENDPOINT配置: {ENDPOINT}")
 
 FALLBACK = {
     "success": True,

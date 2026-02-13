@@ -243,10 +243,321 @@ body {
   margin-top: 20px;
 }
 
+.footer-actions {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.weekly-report-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.weekly-report-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+  background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%);
+}
+
+.weekly-report-btn:active {
+  transform: translateY(0);
+}
+
+.weekly-report-btn.has-new {
+  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+  animation: pulse 2s infinite;
+}
+
+.weekly-report-btn.has-new:hover {
+  background: linear-gradient(135deg, #F57C00 0%, #FF9800 100%);
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 152, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-btn {
+  padding: 6px;
+  background: #f5f7fa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+.weekly-reports-container {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.weekly-reports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.current-week-report {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.current-week-report h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #1976d2;
+}
+
+.historical-reports h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.weekly-report-item {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.3s ease;
+}
+
+.weekly-report-item.current {
+  border-color: #2196f3;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);
+}
+
+.weekly-report-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.report-date {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.current-badge {
+  background: #ff9800;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.report-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.stat-label {
+  display: block;
+  font-size: 10px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.report-preview {
+  margin-bottom: 12px;
+}
+
+.top-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.keyword-tag {
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.view-report-detail {
+  width: 100%;
+  padding: 8px 16px;
+  background: #f5f7fa;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-report-detail:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+/* 模态框样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.report-detail-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 90%;
+  max-height: 80%;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.report-detail-modal h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.detail-stats {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.detail-stats p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.keywords-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.keyword-bubble {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.close-modal {
+  width: 100%;
+  padding: 12px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 16px;
+}
+
+.close-modal:hover {
+  background: #d32f2f;
+}
+
 .stats {
   text-align: center;
   font-size: 13px;
   color: #666;
+}
+
+/* 确保所有状态类都有样式 */
+.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-analyzed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-ai_failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* 响应式设计优化 */
+@media (max-width: 400px) {
+  body {
+    width: 100%;
+    min-width: 320px;
+  }
+  
+  .page {
+    padding: 15px;
+  }
+  
+  .header h1 {
+    font-size: 20px;
+  }
+  
+  .header h2 {
+    font-size: 16px;
+  }
+};
 }
 
 /* 滚动条样式 */

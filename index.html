@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI书签收藏助手 - 简易入口</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 800px;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .header p {
+      font-size: 1.2em;
+      opacity: 0.9;
+      margin-bottom: 20px;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      padding: 40px;
+      background: #f8f9fa;
+    }
+
+    .feature-card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      text-align: center;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+
+    .feature-icon {
+      font-size: 2.5em;
+      margin-bottom: 15px;
+      color: #667eea;
+    }
+
+    .feature-title {
+      font-size: 1.3em;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .feature-desc {
+      color: #666;
+      font-size: 0.95em;
+      line-height: 1.6;
+    }
+
+    .actions {
+      padding: 30px;
+      text-align: center;
+      background: white;
+      border-top: 1px solid #eee;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 32px;
+      margin: 0 10px;
+      border: none;
+      border-radius: 50px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s;
+      min-width: 200px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-secondary:hover {
+      background: #f0f4ff;
+      transform: translateY(-3px);
+    }
+
+    .installation-steps {
+      padding: 30px;
+      background: #f8f9fa;
+    }
+
+    .steps-title {
+      text-align: center;
+      font-size: 1.5em;
+      color: #333;
+      margin-bottom: 25px;
+    }
+
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      padding: 15px 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+
+    .step-number {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+
+    .step-text {
+      font-size: 1em;
+      color: #555;
+    }
+
+    .qr-section {
+      padding: 30px;
+      text-align: center;
+      background: white;
+      border-top: 1px solid #eee;
+    }
+
+    .qr-title {
+      font-size: 1.3em;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .qr-code {
+      width: 150px;
+      height: 150px;
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto;
+      border: 5px solid white;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .qr-placeholder {
+      font-size: 0.8em;
+      color: #999;
+    }
+
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 2em;
+      }
+
+      .header p {
+        font-size: 1em;
+      }
+
+      .features {
+        grid-template-columns: 1fr;
+        padding: 20px;
+      }
+
+      .btn {
+        display: block;
+        margin: 10px auto;
+        width: 80%;
+        max-width: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📚 AI书签收藏助手</h1>
+      <p>智能收藏 · AI分析 · 一键管理</p>
+      <p>让您的知识收藏更智能、更高效</p>
+    </div>
+
+    <div class="features">
+      <div class="feature-card">
+        <div class="feature-icon">🔖</div>
+        <h3 class="feature-title">智能收藏</h3>
+        <p class="feature-desc">一键收藏网页选中内容，自动提取关键信息并存储</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3 class="feature-title">AI分析</h3>
+        <p class="feature-desc">利用AI技术自动分析内容，提取关键词、分类和摘要</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌐</div>
+        <h3 class="feature-title">微信支持</h3>
+        <p class="feature-desc">特别优化微信公众号文章收藏，精准提取内容</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3 class="feature-title">多端同步</h3>
+        <p class="feature-desc">支持移动端访问，随时随地查看和管理收藏内容</p>
+      </div>
+    </div>
+
+    <div class="installation-steps">
+      <h3 class="steps-title">快速开始</h3>
+      <div class="steps-container">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-text">下载并安装Chrome扩展程序</div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-text">在浏览器右上角点击扩展图标</div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-text">使用测试账号登录：test / test123</div>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-text">选中文本右键选择"收藏选中内容到AI书签"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <a href="chrome-extension/popup.html" class="btn btn-primary">
+        🚀 打开Chrome扩展
+      </a>
+      <a href="http://10.76.244.132:8000/docs" class="btn btn-secondary">
+        📄 查看API文档
+      </a>
+    </div>
+
+    <div class="qr-section">
+      <h3 class="qr-title">移动端访问</h3>
+      <div class="qr-code">
+        <div class="qr-placeholder">二维码<br>http://192.168.41.132:8000</div>
+      </div>
+      <p style="margin-top: 15px; color: #666;">
+        在移动设备上访问: <strong>http://192.168.41.132:8000</strong>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // 添加一些交互效果
+    document.querySelectorAll('.feature-card').forEach(card => {
+      card.addEventListener('mouseenter', () => {
+        card.style.transform = 'translateY(-5px)';
+      });
+      
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'translateY(0)';
+      });
+    });
+
+    // 检测是否在移动设备上访问并提供相应提示
+    if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+      alert('您正在移动设备上访问，可以收藏此页面以便随时使用AI书签服务');
+    }
+  </script>
+</body>
+</html>
