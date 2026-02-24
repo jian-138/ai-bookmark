@@ -428,4 +428,7 @@ from routes.weekly_report_routes import router as weekly_report_router
 app.include_router(weekly_report_router)
 
 # --------- 启动定时任务 ----------
-start_scheduler()
+# 使用后台线程启动调度器，避免阻塞主应用
+import threading
+scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
+scheduler_thread.start()
