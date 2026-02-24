@@ -30,10 +30,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import asyncio
+
 # 启动定时任务调度器 - 在应用启动完成后运行
 @app.on_event("startup")
 async def startup_event():
-    start_scheduler()
+    # 延迟启动调度器，确保主应用先启动
+    asyncio.create_task(delayed_scheduler_start())
+
+async def delayed_scheduler_start():
+    """延迟启动调度器，避免影响应用启动时间"""
+    await asyncio.sleep(2)  # 短暂延迟后启动调度器
+    try:
+        start_scheduler()
+        print("定时任务调度器已启动")
+    except Exception as e:
+        print(f"启动调度器时出错: {e}")
 
 # --------- 请求与响应模型 ----------
 # 用户认证
