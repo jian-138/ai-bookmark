@@ -32,6 +32,11 @@ app.add_middleware(
 
 import asyncio
 
+# 健康检查端点
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "AI Bookmark service is running"}
+
 # 启动定时任务调度器 - 在应用启动完成后运行
 @app.on_event("startup")
 async def startup_event():

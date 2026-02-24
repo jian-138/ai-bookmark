@@ -10,3 +10,4 @@ google-auth
 protobuf
 tqdm
 schedule==1.2.0
+beautifulsoup4==4.12.2
