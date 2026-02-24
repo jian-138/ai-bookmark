@@ -1,10 +1,10 @@
 // background.js - Service Worker for Chrome Extension
 // API配置
-const API_BASE_URL = 'http://localhost:8000';  // 改为localhost，因为服务器实际只监听在localhost
+const API_BASE_URL = 'http://localhost:8000';  // 本地开发环境
 const API_BASE_URL_PRODUCTION = 'https://ai-bookmark-production.up.railway.app';
 
-// 使用本地API（可在设置中切换）
-let currentApiUrl = API_BASE_URL;
+// 使用生产API环境（部署到Railway后）
+let currentApiUrl = API_BASE_URL_PRODUCTION;
 
 // 离线缓存队列
 let offlineQueue = [];
@@ -156,7 +156,7 @@ async function login(username, password) {
     console.error('Login error:', error);
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error('网络连接失败，请检查后端服务是否正在运行 (https://ai-bookmark-production.up.railway.app)');
     }
     throw error;
   }
@@ -243,7 +243,7 @@ async function collectText(text, url, tab) {
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error('网络连接失败，请检查后端服务是否正在运行 (https://ai-bookmark-production.up.railway.app)');
     }
     
     throw error;
@@ -330,7 +330,7 @@ async function collectWebPage(url, tab) {
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error('网络连接失败，请检查后端服务是否正在运行 (https://ai-bookmark-production.up.railway.app)');
     }
     
     throw error;
@@ -374,7 +374,7 @@ async function getCollections(page = 1, size = 20) {
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error('网络连接失败，请检查后端服务是否正在运行 (https://ai-bookmark-production.up.railway.app)');
     }
     
     throw error;
