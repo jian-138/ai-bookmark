@@ -21,9 +21,6 @@ load_dotenv()
 
 app = FastAPI(title="AI 收藏夹服务", version="0.2")
 
-# 启动定时任务调度器
-start_scheduler()
-
 # --------- CORS 配置 ----------
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +29,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 启动定时任务调度器 - 在应用启动完成后运行
+@app.on_event("startup")
+async def startup_event():
+    start_scheduler()
 
 # --------- 请求与响应模型 ----------
 # 用户认证
