@@ -425,6 +425,7 @@ app.include_router(wechat_router)
 
 # --------- 启动定时任务 ----------
 # 使用后台线程启动调度器，避免阻塞主应用
+from scheduler import start_scheduler
 import threading
 scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
 scheduler_thread.start()
