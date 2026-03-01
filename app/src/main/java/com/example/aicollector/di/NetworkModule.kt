@@ -23,10 +23,11 @@ object NetworkModule {
     // For testing without backend, enable MOCK_API = true to return canned responses.
     private const val MOCK_API = false
     
-    // 使用模拟器时用 10.0.2.2 代表宿主机的 localhost
-    // 使用真机时用实际的局域网IP（如 192.168.8.107）
-    // 生产环境用 Railway URL
-    private const val BASE_URL = "http://10.0.2.2:8000/"
+    // 默认使用Railway生产环境（开箱即用）
+    // 本地开发时可以改为：
+    // - 模拟器: "http://10.0.2.2:8000/"
+    // - 真机: "http://你的局域网IP:8000/"
+    private const val BASE_URL = "https://ai-bookmark-production.up.railway.app/"
     private const val TIMEOUT_SECONDS = 30L
     
     @Provides
