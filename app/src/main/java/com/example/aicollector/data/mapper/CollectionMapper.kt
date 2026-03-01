@@ -2,6 +2,7 @@ package com.example.aicollector.data.mapper
 
 import com.example.aicollector.data.local.entity.CollectionEntity
 import com.example.aicollector.data.model.CollectionResponse
+import com.example.aicollector.domain.model.ArticleMetadata
 import com.example.aicollector.domain.model.CollectionItem
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -17,17 +18,40 @@ object CollectionMapper {
             emptyList()
         }
         
+        val metadataObj = try {
+            if (!metadataJson.isNullOrBlank()) {
+                gson.fromJson(metadataJson, ArticleMetadata::class.java)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+        
         return CollectionItem(
             id = id,
             originalText = originalText,
             keywords = keywordsList,
             category = category,
             timestamp = timestamp,
-            userId = userId
+            userId = userId,
+            url = url,
+            metadata = metadataObj,
+            summary = summary
         )
     }
     
     fun CollectionItem.toEntity(synced: Boolean = true): CollectionEntity {
+        val metadataJsonStr = try {
+            if (metadata != null) {
+                gson.toJson(metadata)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+        
         return CollectionEntity(
             id = id,
             originalText = originalText,
@@ -35,7 +59,10 @@ object CollectionMapper {
             category = category,
             timestamp = timestamp,
             userId = userId,
-            synced = synced
+            synced = synced,
+            url = url,
+            metadataJson = metadataJsonStr,
+            summary = summary
         )
     }
     

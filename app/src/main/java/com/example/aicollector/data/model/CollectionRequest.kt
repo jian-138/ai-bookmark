@@ -1,5 +1,6 @@
 package com.example.aicollector.data.model
 
+import com.example.aicollector.domain.model.ArticleMetadata
 import com.google.gson.annotations.SerializedName
 
 data class CollectionRequest(
@@ -8,5 +9,7 @@ data class CollectionRequest(
     @SerializedName("original_text")
     val originalText: String,
     @SerializedName("url")
-    val url: String?
+    val url: String?,
+    @SerializedName("metadata")
+    val metadata: ArticleMetadata? = null
 )

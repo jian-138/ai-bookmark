@@ -6,3 +6,5 @@ plugins {
     alias(libs.plugins.hilt.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
 }
+
+// Note: Gradle JVM selection is handled via `org.gradle.java.home` in gradle.properties

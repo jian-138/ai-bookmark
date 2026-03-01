@@ -41,4 +41,10 @@ object DatabaseModule {
     fun providePendingCollectionDao(database: AppDatabase): PendingCollectionDao {
         return database.pendingCollectionDao()
     }
+    
+    @Provides
+    @Singleton
+    fun provideArticleCacheDao(database: AppDatabase): com.example.aicollector.data.local.dao.ArticleCacheDao {
+        return database.articleCacheDao()
+    }
 }

@@ -1,7 +1,9 @@
 package com.example.aicollector.di
 
+import com.example.aicollector.data.repository.ArticleRepositoryImpl
 import com.example.aicollector.data.repository.AuthRepositoryImpl
 import com.example.aicollector.data.repository.CollectionRepositoryImpl
+import com.example.aicollector.domain.repository.ArticleRepository
 import com.example.aicollector.domain.repository.AuthRepository
 import com.example.aicollector.domain.repository.CollectionRepository
 import dagger.Binds
@@ -25,4 +27,10 @@ abstract class RepositoryModule {
     abstract fun bindCollectionRepository(
         collectionRepositoryImpl: CollectionRepositoryImpl
     ): CollectionRepository
+    
+    @Binds
+    @Singleton
+    abstract fun bindArticleRepository(
+        articleRepositoryImpl: ArticleRepositoryImpl
+    ): ArticleRepository
 }

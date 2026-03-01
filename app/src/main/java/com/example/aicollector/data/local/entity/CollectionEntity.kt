@@ -11,5 +11,8 @@ data class CollectionEntity(
     val category: String,
     val timestamp: Long,
     val userId: String,
-    val synced: Boolean
+    val synced: Boolean,
+    val url: String? = null,
+    val metadataJson: String? = null, // JSON object stored as string
+    val summary: String? = null
 )

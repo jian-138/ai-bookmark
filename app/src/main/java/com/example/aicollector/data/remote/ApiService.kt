@@ -54,4 +54,12 @@ interface ApiService {
     suspend fun login(
         @Body credentials: LoginRequest
     ): Response<LoginResponse>
+    
+    /**
+     * 解析微信公众号文章 - 对应 POST /api/v1/article/parse
+     */
+    @POST("/api/v1/article/parse")
+    suspend fun parseArticle(
+        @Body request: ArticleParseRequest
+    ): Response<ArticleParseResponse>
 }

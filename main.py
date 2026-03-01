@@ -1,21 +1,21 @@
-# main.py
 import os
-import json
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 from dotenv import load_dotenv
 from typing import Optional, List
 from datetime import datetime
 import uuid
+import requests
+from bs4 import BeautifulSoup
 
-# 延迟导入可能有问题的模块
-from routes.auth_routes import router as auth_router
-from routes.collection_routes import router as collection_router
-from routes.wechat_routes import router as wechat_router
+# 导入 DeepSeek 分析函数
+from ai.analyze import analyze_text
 
+# --------- 加载环境变量 ----------
 load_dotenv()
 
+# --------- FastAPI App ----------
 app = FastAPI(title="AI 收藏夹服务", version="0.2")
 
 # --------- CORS 配置 ----------
@@ -26,13 +26,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-import asyncio
-
-# 健康检查端点
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "message": "AI Bookmark service is running"}
 
 # --------- 请求与响应模型 ----------
 # 用户认证
@@ -50,8 +43,8 @@ class LoginResponse(BaseModel):
 class CollectionRequest(BaseModel):
     user_id: str
     original_text: str
-    title: Optional[str] = None
-    source_url: Optional[str] = None
+    url: Optional[str] = None
+    metadata: Optional[dict] = None  # 添加metadata字段
 
 class CollectionResponse(BaseModel):
     success: bool
@@ -77,9 +70,22 @@ class CollectionDetailResponse(BaseModel):
     data: Optional[CollectionItem] = None
     message: Optional[str] = None
 
+# 文章解析相关
+class ArticleParseRequest(BaseModel):
+    url: HttpUrl
+
+class ArticleParseResponse(BaseModel):
+    success: bool
+    title: str
+    content: str
+    author: str
+    publish_time: str
+    cover_image: Optional[str] = None
+    error: Optional[str] = None
+
 class CollectionListResponse(BaseModel):
     success: bool
-    data: List[CollectionItem]
+    items: List[CollectionItem]  # 改为items，匹配前端
     total: int
     page: int
     size: int
@@ -101,14 +107,7 @@ class AnalyzeResponse(BaseModel):
     confidence: float | None = None
     error: str | None = None
 
-FALLBACK = {
-    "success": True,
-    "keywords": ["人工智能", "教育", "机器学习"],
-    "category": "科技,教育",
-    "summary": "AI 通过个性化路径提升教育效果。",
-    "confidence": 0.91,
-}
-
+# --------- 本地测试接口（固定返回） ----------
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def local_analyze(req: AnalyzeRequest):
     return AnalyzeResponse(
@@ -117,92 +116,39 @@ async def local_analyze(req: AnalyzeRequest):
         category="科技,教育",
         summary="AI 通过个性化路径提升教育效果。",
         confidence=0.91,
-        error=None
     )
 
+# --------- 正式接口（硅基流动） ----------
 @app.post("/internal/ai/analyze", response_model=AnalyzeResponse)
 async def internal_analyze(req: AnalyzeRequest):
-    print(">>> INTERNAL ANALYZE HIT")
+    result, err = analyze_text(req.text)
 
-    url = (req.metadata.url or "").strip()
-    print("URL =", url)
-
-    err = None
-    raw_result = None
-
-    try:
-        # 选择分析函数
-        if "mp.weixin.qq.com" in url:
-            print("MODE = WECHAT ARTICLE")
-            raw_result, err = get_or_analyze_article(
-                url=url,
-                content=req.text,
-                title=req.collect_id,
-                analyze_wechat_article=analyze_wechat_article
-            )
-        else:
-            print("MODE = NORMAL TEXT")
-            raw_result, err = analyze_text(req.text)
-
-        print("RAW RESULT =", raw_result)
-
-        # 强制防御：保证 result 是 dict
-        if isinstance(raw_result, str):
-            # 清理 ```json ``` 包裹
-            raw_result = raw_result.strip()
-            if raw_result.startswith("```"):
-                raw_result = raw_result.strip("```").strip("json").strip()
-
-            try:
-                raw_result = json.loads(raw_result)
-            except Exception as e:
-                print("JSON PARSE FAILED:", e)
-                raw_result = FALLBACK
-
-        if not isinstance(raw_result, dict):
-            raw_result = FALLBACK
-
-        result = raw_result
-
-    except Exception as e:
-        print("INTERNAL ERROR:", e)
-        return AnalyzeResponse(
-            success=True,
-            keywords=FALLBACK["keywords"],
-            category=FALLBACK["category"],
-            summary=FALLBACK["summary"],
-            confidence=FALLBACK["confidence"],
-            error=f"内部调用异常: {str(e)}"
-        )
-
-    # fallback 兜底
     if err:
-        print("MODEL ERROR =", err)
+        # 兜底返回固定示例数据
         return AnalyzeResponse(
             success=True,
-            keywords=result.get("keywords", FALLBACK["keywords"]),
-            category=result.get("category", FALLBACK["category"]),
-            summary=result.get("summary", FALLBACK["summary"]),
-            confidence=result.get("confidence", FALLBACK["confidence"]),
+            keywords=["人工智能", "教育", "机器学习"],
+            category="科技,教育",
+            summary="AI 通过个性化路径提升教育效果。",
+            confidence=0.91,
             error=err
         )
 
-    # 成功返回
     return AnalyzeResponse(
         success=True,
-        keywords=result.get("keywords", FALLBACK["keywords"]),
-        category=result.get("category", FALLBACK["category"]),
-        summary=result.get("summary", FALLBACK["summary"]),
-        confidence=result.get("confidence", FALLBACK["confidence"]),
-        error=None
+        keywords=result.get("keywords"),
+        category=result.get("category"),
+        summary=result.get("summary"),
+        confidence=result.get("confidence"),
     )
 
+# --------- 内存存储（临时方案） ----------
+collections_storage = []  # 存储收藏记录
+
+# --------- 根路径 ----------
 @app.get("/")
 def root():
     return {"message": "AI 收藏夹服务运行中"}
-
-# --------- 内存存储（临时方案） ----------
-collections_storage = []  # 临时存储收藏列表
 
 # --------- 移动端 API ----------
 # 用户登录
@@ -224,35 +170,6 @@ async def login(req: LoginRequest):
 @app.post("/api/v1/collect", response_model=CollectionResponse, status_code=201)
 async def submit_collection(req: CollectionRequest, authorization: Optional[str] = Header(None)):
     """提交收藏接口"""
-    
-    # 检查是否是网页收藏请求（有URL但无内容）
-    if req.source_url and (not req.original_text or not req.original_text.strip() or len(req.original_text.strip()) < 10):
-        print(f"检测到网页收藏请求，开始提取内容: {req.source_url}")
-        
-        # 尝试提取网页内容
-        try:
-            from web_content_extractor import extract_web_content
-            success, web_content, error = extract_web_content(req.source_url)
-            
-            if success:
-                # 使用提取的网页内容
-                req.original_text = web_content['content']
-                if not req.title:
-                    req.title = web_content['title']
-                print(f"网页内容提取成功: {web_content['title']} ({len(web_content['content'])}字)")
-            else:
-                raise HTTPException(status_code=400, detail=f"网页内容提取失败: {error}")
-                
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"网页内容提取异常: {str(e)}")
-    
-    # 调试：检查接收到的文本内容
-    print(f"接收到的原始文本: {repr(req.original_text)}")
-    print(f"文本长度: {len(req.original_text)}")
-    print(f"文本前50个字符: {req.original_text[:50]}")
-    
     # 校验文本长度
     if len(req.original_text.strip()) < 10:
         raise HTTPException(status_code=400, detail="TEXT_TOO_SHORT: 文本长度不足10个字符")
@@ -260,76 +177,29 @@ async def submit_collection(req: CollectionRequest, authorization: Optional[str]
     # 生成收藏ID
     collect_id = "col_" + str(uuid.uuid4())
     created_at = datetime.utcnow().isoformat() + "Z"
-    updated_at = created_at
     
-    # 初始状态为待分析
-    status = "PENDING"
-    ai_keywords = []
-    ai_category = ""
-    summary = ""
-    ai_confidence = 0.0
-    
-    # 调用AI分析功能
-    try:
-        from ai.analyze import analyze_text
-        
-        print(f"开始AI分析，文本长度: {len(req.original_text)}")
-        
-        # 调用真正的AI分析
-        analysis_result, error = analyze_text(req.original_text)
-        
-        print(f"AI分析结果: {analysis_result}")
-        print(f"AI分析错误: {error}")
-        
-        if analysis_result and not error:
-            # 使用AI分析结果
-            ai_keywords = analysis_result.get("keywords", [])
-            ai_category = analysis_result.get("category", "")
-            summary = analysis_result.get("summary", "")
-            ai_confidence = analysis_result.get("confidence", 0.85)
-            status = "ANALYZED"
-            print(f"AI分析成功: 关键词={ai_keywords}, 分类={ai_category}")
-        else:
-            # AI分析失败，使用默认值
-            ai_keywords = ["待分析"]
-            ai_category = "未分类"
-            summary = req.original_text[:50] + "..."
-            ai_confidence = 0.0
-            status = "AI_FAILED"
-            print("AI分析失败，使用默认值")
-            
-    except Exception as e:
-        print(f"AI分析失败: {str(e)}")
-        # 降级处理
-        ai_keywords = ["分析失败"]
-        ai_category = "未分类"
-        summary = req.original_text[:50] + "..."
-        ai_confidence = 0.0
-        status = "AI_FAILED"
-    
-    # 创建收藏项
+    # 保存到内存存储
     collection_item = {
         "collect_id": collect_id,
         "user_id": req.user_id,
         "original_text": req.original_text,
-        "url": req.source_url,
-        "ai_keywords": ai_keywords,
-        "ai_category": ai_category,
-        "summary": summary,
-        "ai_confidence": ai_confidence,
-        "status": status,
+        "url": req.url,
+        "metadata": req.metadata,  # 直接保存字典
+        "ai_keywords": ["AI", "收藏"],  # TODO: 调用AI分析
+        "ai_category": "未分类",
+        "summary": req.original_text[:100],
+        "ai_confidence": 0.0,
+        "status": "PENDING",
         "created_at": created_at,
-        "updated_at": updated_at
+        "updated_at": created_at
     }
-    
-    # 存储到内存
-    collections_storage.insert(0, collection_item)  # 插入到列表开头
+    collections_storage.insert(0, collection_item)  # 插入到开头，最新的在前面
     
     return CollectionResponse(
         success=True,
         collect_id=collect_id,
         created_at=created_at,
-        message="收藏成功，已提交 AI 分析"
+        message="收藏成功"
     )
 
 # 查询单条收藏
@@ -366,14 +236,33 @@ async def get_collections(
     authorization: Optional[str] = Header(None)
 ):
     """获取收藏列表"""
-    # 从内存中获取数据
-    start = (page - 1) * size
+    # 兼容从0开始的页码
+    actual_page = page if page > 0 else 1
+    start = (actual_page - 1) * size
     end = start + size
-    page_items = collections_storage[start:end]
+    items = collections_storage[start:end]
+    
+    # 转换为CollectionItem格式
+    collection_items = [
+        CollectionItem(
+            collect_id=item["collect_id"],
+            user_id=item["user_id"],
+            original_text=item["original_text"],
+            url=item.get("url"),
+            ai_keywords=item.get("ai_keywords", []),
+            ai_category=item.get("ai_category", "未分类"),
+            summary=item.get("summary"),
+            ai_confidence=item.get("ai_confidence", 0.0),
+            status=item["status"],
+            created_at=item["created_at"],
+            updated_at=item["updated_at"]
+        )
+        for item in items
+    ]
     
     return CollectionListResponse(
         success=True,
-        data=page_items,
+        items=collection_items,  # 改为items
         total=len(collections_storage),
         page=page,
         size=size
@@ -390,7 +279,7 @@ async def search_collections(
     # TODO: 实现真实搜索逻辑
     return CollectionListResponse(
         success=True,
-        data=[],
+        items=[],  # 改为items
         total=0,
         page=1,
         size=20
@@ -400,36 +289,107 @@ async def search_collections(
 @app.delete("/api/v1/collections/{collect_id}")
 async def delete_collection(collect_id: str, authorization: Optional[str] = Header(None)):
     """删除收藏"""
-    # TODO: 从数据库删除
+    global collections_storage
+    collections_storage = [item for item in collections_storage if item["collect_id"] != collect_id]
     return {"success": True, "message": "删除成功"}
 
-# --------- 初始化收藏数据存储 ----------
-collections_storage = []
-
-# --------- 设置周报生成器的收藏数据存储 ----------
-try:
-    from weekly_report import weekly_report_generator
-    weekly_report_generator.set_collections_storage(collections_storage)
-except ImportError:
-    print("警告: 周报生成器模块不可用")
-
-# --------- 设置收藏路由的数据存储 ----------
-# 将主程序的数据存储引用传递给路由模块
-import routes.collection_routes
-routes.collection_routes.collections_storage = collections_storage
-
-# --------- 注册路由 ----------
-app.include_router(auth_router)
-app.include_router(collection_router)
-app.include_router(wechat_router)
-
-# --------- 启动定时任务 ----------
-# 使用后台线程启动调度器，避免阻塞主应用
-from scheduler import start_scheduler
-import threading
-scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
-scheduler_thread.start()
-
-# 延迟导入并注册周报路由（在调度器启动后）
-from routes.weekly_report_routes import router as weekly_report_router
-app.include_router(weekly_report_router)
+# 解析微信公众号文章
+@app.post("/api/v1/article/parse", response_model=ArticleParseResponse)
+async def parse_wechat_article(req: ArticleParseRequest):
+    """
+    解析微信公众号文章
+    支持URL格式: mp.weixin.qq.com
+    """
+    try:
+        url_str = str(req.url)
+        
+        # 验证是否为微信公众号链接
+        if "mp.weixin.qq.com" not in url_str:
+            return ArticleParseResponse(
+                success=False,
+                title="",
+                content="",
+                author="",
+                publish_time="",
+                error="仅支持微信公众号文章链接（mp.weixin.qq.com）"
+            )
+        
+        # 1. 请求文章页面
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url_str, headers=headers, timeout=10)
+        response.encoding = 'utf-8'
+        
+        if response.status_code != 200:
+            return ArticleParseResponse(
+                success=False,
+                title="",
+                content="",
+                author="",
+                publish_time="",
+                error=f"无法访问文章页面，状态码：{response.status_code}"
+            )
+        
+        # 2. 解析HTML（使用html.parser，不需要lxml）
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 3. 提取关键信息
+        title_elem = soup.find('h1', id='activity-name')
+        title = title_elem.text.strip() if title_elem else "未知标题"
+        
+        author_elem = soup.find('a', id='js_name')
+        author = author_elem.text.strip() if author_elem else "未知作者"
+        
+        publish_time_elem = soup.find('em', id='publish_time')
+        publish_time = publish_time_elem.text.strip() if publish_time_elem else ""
+        
+        # 4. 提取正文（移除样式和脚本）
+        content_div = soup.find('div', id='js_content')
+        if content_div:
+            # 移除脚本和样式标签
+            for script in content_div.find_all(['script', 'style']):
+                script.decompose()
+            content = content_div.get_text(separator='\n', strip=True)
+        else:
+            content = "无法提取文章内容"
+        
+        # 5. 提取封面图
+        cover_image = None
+        msg_cdn = soup.find('img', class_='rich_pages')
+        if msg_cdn:
+            cover_image = msg_cdn.get('data-src') or msg_cdn.get('src')
+        
+        # 如果没有找到封面图，尝试其他方式
+        if not cover_image:
+            first_img = soup.find('img')
+            if first_img:
+                cover_image = first_img.get('data-src') or first_img.get('src')
+        
+        return ArticleParseResponse(
+            success=True,
+            title=title,
+            content=content,
+            author=author,
+            publish_time=publish_time,
+            cover_image=cover_image
+        )
+        
+    except requests.Timeout:
+        return ArticleParseResponse(
+            success=False,
+            title="",
+            content="",
+            author="",
+            publish_time="",
+            error="请求超时，请检查网络连接"
+        )
+    except Exception as e:
+        return ArticleParseResponse(
+            success=False,
+            title="",
+            content="",
+            author="",
+            publish_time="",
+            error=f"解析失败：{str(e)}"
+        )

@@ -88,7 +88,7 @@ class CollectionRepositoryImpl @Inject constructor(
                     return NetworkResult.Error("Failed to fetch collections")
                 }
                 
-                val items = response.items.map { detail ->
+                val items = (response.items ?: emptyList()).map { detail ->
                     CollectionItem(
                         id = detail.collectId,
                         originalText = detail.originalText,
@@ -130,7 +130,7 @@ class CollectionRepositoryImpl @Inject constructor(
                     return NetworkResult.Error("Search failed")
                 }
                 
-                val items = response.items.map { detail ->
+                val items = (response.items ?: emptyList()).map { detail ->
                     CollectionItem(
                         id = detail.collectId,
                         originalText = detail.originalText,
