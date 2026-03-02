@@ -6,5 +6,11 @@ data class CollectionItem(
     val keywords: List<String>,
     val category: String,
     val timestamp: Long,
-    val userId: String
-)
+    val userId: String,
+    val url: String? = null,
+    val metadata: ArticleMetadata? = null,
+    val summary: String? = null
+) {
+    val isArticle: Boolean
+        get() = metadata != null && metadata.source == "wechat_official"
+}

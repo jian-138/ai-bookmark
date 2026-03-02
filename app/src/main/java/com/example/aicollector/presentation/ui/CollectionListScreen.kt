@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,7 +23,8 @@ import java.util.*
 @Composable
 fun CollectionListScreen(
     viewModel: CollectionListViewModel = hiltViewModel(),
-    onItemClick: (String) -> Unit
+    onItemClick: (String) -> Unit,
+    onAddArticle: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
@@ -52,6 +54,13 @@ fun CollectionListScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            androidx.compose.material3.ExtendedFloatingActionButton(
+                onClick = onAddArticle,
+                icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Default.Add, "添加") },
+                text = { androidx.compose.material3.Text("收藏文章") }
+            )
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
@@ -76,11 +85,19 @@ fun CollectionListScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(state.collections, key = { it.id }) { item ->
-                        CollectionItemCard(
-                            item = item,
-                            onClick = { onItemClick(item.id) },
-                            onDelete = { viewModel.deleteCollection(item.id) }
-                        )
+                        if (item.isArticle) {
+                            ArticleCardItem(
+                                article = item,
+                                onClick = { onItemClick(item.id) },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            TextCardItem(
+                                item = item,
+                                onClick = { onItemClick(item.id) },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
                     }
                     
                     if (state.isLoading) {

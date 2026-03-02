@@ -130,5 +130,26 @@ env.example
 *.tmp
 *.bak
 *.old
+*.backup
 *~
 .gitignore#
+
+# Test files and scripts
+test_*.py
+debug_*.py
+*_test.py
+crash_log.txt
+start_backend.bat
+start_server.bat
+
+# Android logs
+app/logs/
+*.log
+
+# Temporary services
+backend/app/services/
+
+# Documentation (keep in repo but ignore temp versions)
+# 测试问题修复总结.md
+# 调试收藏列表问题.md
+# 快速测试指南.md

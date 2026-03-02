@@ -40,12 +40,12 @@ android {
     }
     
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     
     buildFeatures {
@@ -74,6 +74,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // Image loading (Coil)
+    implementation("io.coil-kt:coil-compose:2.4.0")
+    // Ensure OkHttp is available (already present) - no-op here
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
