@@ -12,10 +12,13 @@
   "host_permissions": [
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*",
+    "http://localhost:8001/*",
+    "http://127.0.0.1:8001/*",
     "https://ai-bookmark-production.up.railway.app/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_popup": "popup.html"

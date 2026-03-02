@@ -153,7 +153,7 @@ function renderCollections(collections) {
     <div class="collection-item">
       <div class="collection-header">
         <span class="collection-id">${item.collect_id}</span>
-        <span class="collection-status status-${item.status.toLowerCase()}">${getStatusText(item.status)}</span>
+        <span class="collection-status status-${(item.status || 'PENDING').toLowerCase()}">${getStatusText(item.status || 'PENDING')}</span>
       </div>
       <div class="collection-text">${truncate(item.original_text, 100)}</div>
       ${item.url ? `<div class="collection-url"><a href="${item.url}" target="_blank">${item.url}</a></div>` : ''}
@@ -201,12 +201,14 @@ async function syncOfflineQueue() {
 
 // 工具函数
 function getStatusText(status) {
+  // 确保status不是undefined或null
+  const normalizedStatus = status || 'PENDING';
   const statusMap = {
     'PENDING': '待分析',
     'ANALYZED': '已分析',
     'AI_FAILED': '分析失败'
   };
-  return statusMap[status] || status;
+  return statusMap[normalizedStatus] || normalizedStatus;
 }
 
 function truncate(text, length) {
@@ -497,3 +499,14 @@ function backToMainPage() {
   document.getElementById('weekly-report-page').style.display = 'none';
   document.getElementById('main-page').style.display = 'block';
 }
+
+// 监听来自background的消息
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'collectionAdded') {
+    // 收藏添加后刷新列表
+    setTimeout(() => {
+      loadCollections();
+      checkOfflineQueue();
+    }, 1000); // 延迟1秒，确保后端有时间处理
+  }
+});

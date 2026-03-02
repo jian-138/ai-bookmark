@@ -11,38 +11,42 @@ def test_web_collection():
     """测试网页收藏功能"""
     
     # 测试URL
-    test_url = "https://www.sina.com.cn"
+    test_urls = [
+        "https://www.sina.com.cn",
+        "https://www.qq.com",
+        "https://www.163.com"
+    ]
     
-    # 测试数据
-    data = {
-        "user_id": "test_user",
-        "original_text": "",  # 空内容，触发网页提取
-        "source_url": test_url,
-        "title": "测试网页收藏"
-    }
+    api_url = "http://localhost:8000/api/v1/collect"
     
-    print(f"测试网页收藏功能 - URL: {test_url}")
-    print(f"请求数据: {json.dumps(data, indent=2)}")
-    
-    try:
-        # 发送请求到API
-        response = requests.post(
-            "http://localhost:8001/api/v1/collect",
-            json=data,
-            headers={"Content-Type": "application/json"}
-        )
+    for url in test_urls:
+        print(f"\n=== 测试网页收藏: {url} ===")
         
-        print(f"响应状态码: {response.status_code}")
-        print(f"响应内容: {response.text}")
+        # 构建请求数据
+        data = {
+            "user_id": "test_user",
+            "original_text": "",  # 空内容，让后端自动提取
+            "source_url": url
+        }
         
-        if response.status_code == 200:
-            result = response.json()
-            print(f"收藏成功: {result}")
-        else:
-            print(f"收藏失败: {response.text}")
+        try:
+            response = requests.post(api_url, json=data, timeout=30)
             
-    except Exception as e:
-        print(f"测试失败: {str(e)}")
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    print(f"✅ 收藏成功")
+                    print(f"收藏ID: {result.get('collection_id')}")
+                    print(f"消息: {result.get('message')}")
+                else:
+                    print(f"❌ 收藏失败")
+                    print(f"消息: {result.get('message')}")
+            else:
+                print(f"❌ HTTP错误: {response.status_code}")
+                print(f"响应: {response.text}")
+                
+        except Exception as e:
+            print(f"❌ 请求失败: {str(e)}")
 
 if __name__ == "__main__":
     test_web_collection()

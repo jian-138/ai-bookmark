@@ -41,11 +41,10 @@ async def collect_content(request: dict):
     title = request.get('title', '')
     
     print(f"调试信息: 收到收藏请求 - 用户: {user_id}, URL: {source_url}, 文本长度: {len(original_text)}")
-    print(f"原始请求数据: {request}")
     
     # 如果是网页收藏请求（有URL但无内容）
-    print(f"条件检查: source_url={bool(source_url)}, original_text长度={len(original_text)}")
-    print(f"条件判断: source_url and (not original_text or not original_text.strip()) = {source_url and (not original_text or not original_text.strip())}")
+    print(f"条件检查: source_url='{source_url}', original_text长度={len(original_text)}, original_text.strip()='{original_text.strip() if original_text else 'None'}'")
+    print(f"条件判断: source_url存在={bool(source_url)}, 原始文本为空={not original_text}, 原始文本strip为空={not original_text.strip() if original_text else True}")
     
     if source_url and (not original_text or not original_text.strip()):
         print(f"检测到网页收藏请求，开始提取内容: {source_url}")
@@ -53,26 +52,19 @@ async def collect_content(request: dict):
         # 如果只有URL没有内容，则尝试提取网页内容
         if WEB_EXTRACTOR_AVAILABLE:
             print("网页内容提取模块可用，开始提取...")
-            try:
-                success, web_content, error = extract_web_content(source_url)
-                
-                if success:
-                    # 使用提取的网页内容
-                    original_text = web_content['content']
-                    title = title or web_content['title']
-                    print(f"网页内容提取成功: {web_content['title']} ({web_content['word_count']}字)")
-                    print(f"提取的内容预览: {web_content['content'][:100]}...")
-                else:
-                    print(f"网页内容提取失败: {error}")
-                    return {
-                        "success": False,
-                        "message": f"网页内容提取失败: {error}"
-                    }
-            except Exception as e:
-                print(f"网页内容提取异常: {str(e)}")
+            success, web_content, error = extract_web_content(source_url)
+            
+            if success:
+                # 使用提取的网页内容
+                original_text = web_content['content']
+                title = title or web_content['title']
+                print(f"网页内容提取成功: {web_content['title']} ({web_content['word_count']}字)")
+                print(f"提取的内容预览: {web_content['content'][:100]}...")
+            else:
+                print(f"网页内容提取失败: {error}")
                 return {
                     "success": False,
-                    "message": f"网页内容提取异常: {str(e)}"
+                    "message": f"网页内容提取失败: {error}"
                 }
         else:
             print("网页内容提取模块不可用")
