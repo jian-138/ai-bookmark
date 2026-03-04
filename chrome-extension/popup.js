@@ -1,6 +1,212 @@
 // popup.js - Popup 界面逻辑
-// 导入登录优化器
-import { LoginOptimizer, LoginStateManager } from './login_enhancer.js';
+
+/**
+ * 登录请求优化器
+ * 提供智能重试、超时处理和错误恢复
+ */
+class LoginOptimizer {
+  constructor() {
+    this.maxRetries = 3;
+    this.baseTimeout = 15000; // 基础超时 15秒
+    this.retryDelays = [1000, 2000, 3000]; // 重试等待时间
+  }
+
+  /**
+   * 优化的登录请求
+   */
+  async optimizedLogin(username, password) {
+    console.log(`[LoginOptimizer] 开始登录优化流程，用户: ${username}`);
+    
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        console.log(`[LoginOptimizer] 登录尝试 ${attempt}/${this.maxRetries}`);
+        
+        const result = await this.attemptLogin(username, password, attempt);
+        
+        if (result.success) {
+          console.log(`[LoginOptimizer] 登录成功！`);
+          return result;
+        } else {
+          // 如果是认证错误，不重试
+          if (result.error?.includes('用户名') || result.error?.includes('密码')) {
+            console.log(`[LoginOptimizer] 认证失败，停止重试`);
+            return result;
+          }
+          
+          // 其他错误继续重试
+          console.log(`[LoginOptimizer] 登录失败，准备重试: ${result.error}`);
+          if (attempt < this.maxRetries) {
+            await this.delay(this.retryDelays[attempt - 1]);
+          }
+        }
+      } catch (error) {
+        console.error(`[LoginOptimizer] 第${attempt}次尝试异常:`, error);
+        
+        // 最后一次尝试，返回错误
+        if (attempt >= this.maxRetries) {
+          return {
+            success: false,
+            error: this.getFriendlyErrorMessage(error)
+          };
+        }
+        
+        // 等待后重试
+        await this.delay(this.retryDelays[attempt - 1]);
+      }
+    }
+    
+    return {
+      success: false,
+      error: '登录失败，请检查网络连接'
+    };
+  }
+
+  /**
+   * 单次登录尝试
+   */
+  async attemptLogin(username, password, attempt) {
+    const timeout = this.baseTimeout + (attempt - 1) * 5000; // 递增超时
+    
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        console.log(`[LoginOptimizer] 第${attempt}次尝试超时 (${timeout}ms)`);
+        reject(new Error(`登录请求超时 (${timeout/1000}秒)`));
+      }, timeout);
+
+      chrome.runtime.sendMessage({
+        action: 'login',
+        username,
+        password
+      }, (response) => {
+        clearTimeout(timeoutId);
+        
+        if (chrome.runtime.lastError) {
+          reject(new Error(`扩展通信错误: ${chrome.runtime.lastError.message}`));
+          return;
+        }
+        
+        resolve(response || { success: false, error: '未收到响应' });
+      });
+    });
+  }
+
+  /**
+   * 友好的错误信息
+   */
+  getFriendlyErrorMessage(error) {
+    const message = error.message || error.toString();
+    
+    if (message.includes('timeout')) {
+      return '登录超时，请检查网络连接后重试';
+    } else if (message.includes('Failed to fetch') || message.includes('网络')) {
+      return '网络连接失败，请确保后端服务正在运行';
+    } else if (message.includes('扩展通信')) {
+      return '扩展通信错误，请重新加载扩展';
+    } else if (message.includes('HTTP 5')) {
+      return '服务器错误，请稍后重试';
+    } else if (message.includes('用户名') || message.includes('密码')) {
+      return message; // 保持原始认证错误信息
+    } else {
+      return '登录失败，请稍后重试';
+    }
+  }
+
+  /**
+   * 延迟函数
+   */
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+/**
+ * 登录状态管理器
+ */
+class LoginStateManager {
+  constructor() {
+    this.isLoggingIn = false;
+    this.currentUser = null;
+    this.loginCallbacks = [];
+  }
+
+  /**
+   * 执行登录
+   */
+  async performLogin(username, password) {
+    if (this.isLoggingIn) {
+      console.log('[LoginStateManager] 登录已在进行中，跳过重复请求');
+      return { success: false, error: '登录正在进行中' };
+    }
+
+    this.isLoggingIn = true;
+    
+    try {
+      const optimizer = new LoginOptimizer();
+      const result = await optimizer.optimizedLogin(username, password);
+      
+      if (result.success) {
+        this.currentUser = { username, userId: result.data?.user_id };
+        await this.notifyCallbacks('success', result);
+      } else {
+        await this.notifyCallbacks('error', result);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('[LoginStateManager] 登录异常:', error);
+      const errorResult = {
+        success: false,
+        error: '登录过程中发生错误'
+      };
+      await this.notifyCallbacks('error', errorResult);
+      return errorResult;
+    } finally {
+      this.isLoggingIn = false;
+    }
+  }
+
+  /**
+   * 添加登录回调
+   */
+  addCallback(callback) {
+    this.loginCallbacks.push(callback);
+  }
+
+  /**
+   * 通知回调
+   */
+  async notifyCallbacks(status, result) {
+    for (const callback of this.loginCallbacks) {
+      try {
+        await callback(status, result);
+      } catch (error) {
+        console.error('[LoginStateManager] 回调执行失败:', error);
+      }
+    }
+  }
+
+  /**
+   * 获取当前状态
+   */
+  getStatus() {
+    return {
+      isLoggingIn: this.isLoggingIn,
+      currentUser: this.currentUser
+    };
+  }
+
+  /**
+   * 重置状态
+   */
+  reset() {
+    this.isLoggingIn = false;
+    this.currentUser = null;
+    this.loginCallbacks = [];
+  }
+}
+
+// 创建全局实例
+const loginStateManager = new LoginStateManager();
 
 // 收藏列表加载器 - 简单的重试机制
 class CollectionLoader {
@@ -154,8 +360,10 @@ function showMainPage() {
   document.getElementById('main-page').style.display = 'block';
 }
 
-// 处理登录 - 使用优化器
+// 处理登录 - 简化版兼容修复
 async function handleLogin() {
+  console.log('=== 登录处理开始 ===');
+  
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
   const errorEl = document.getElementById('login-error');
@@ -167,51 +375,101 @@ async function handleLogin() {
     return;
   }
   
+  // 按钮状态
   loginBtn.textContent = '登录中...';
   loginBtn.disabled = true;
   errorEl.style.display = 'none';
   errorEl.textContent = '';
   
   try {
-    console.log('=== 使用优化器开始登录流程 ===');
     console.log('用户名:', username);
     
-    // 使用登录优化器
-    const result = await loginStateManager.performLogin(username, password);
+    // 使用Promise包装消息发送，添加超时处理
+    const response = await new Promise((resolve, reject) => {
+      // 延长超时时间到45秒（应对服务响应缓慢）
+      const timeout = setTimeout(() => {
+        reject(new Error('登录请求超时，请检查后端服务是否正在运行'));
+      }, 45000);
+      
+      console.log('发送登录请求到background.js...');
+      
+      chrome.runtime.sendMessage({
+        action: 'login',
+        username: username,
+        password: password
+      }, (response) => {
+        clearTimeout(timeout);
+        
+        if (chrome.runtime.lastError) {
+          console.error('Chrome runtime error:', chrome.runtime.lastError);
+          reject(new Error('扩展通信错误：' + chrome.runtime.lastError.message));
+        } else {
+          console.log('收到登录响应:', response);
+          resolve(response);
+        }
+      });
+    });
     
-    console.log('登录结果:', result);
+    console.log('登录响应结果:', response);
     
-    if (result.success) {
-      console.log('登录成功，显示主页面');
+    // 检查响应
+    if (!response) {
+      throw new Error('未收到服务器响应');
+    }
+    
+    if (response.success) {
+      console.log('登录成功，准备显示主页面');
+      
+      // 保存用户信息（简化版）
+      await chrome.storage.local.set({
+        token: response.token,
+        userId: response.user_id,
+        isLoggedIn: true,
+        username: username
+      });
+      
+      // 显示主页面
       showMainPage();
       
-      // 异步加载数据，避免阻塞界面
+      // 异步加载数据
       setTimeout(() => {
         loadCollections().catch(error => {
           console.error('加载收藏列表失败:', error);
         });
-        checkOfflineQueue().catch(error => {
-          console.error('检查离线队列失败:', error);
-        });
       }, 100);
+      
     } else {
-      console.error('登录失败:', result.error || '未知错误');
-      const errorMsg = result.error || '登录失败，请检查用户名和密码';
+      console.error('登录失败:', response?.error || response?.message || '未知错误');
+      const errorMsg = response?.error || response?.message || '登录失败，请检查用户名和密码';
       errorEl.textContent = errorMsg;
       errorEl.style.display = 'block';
     }
+    
   } catch (error) {
     console.error('=== 登录异常 ===');
     console.error('错误类型:', error.name);
     console.error('错误消息:', error.message);
+    console.error('错误堆栈:', error.stack);
     
-    // 使用优化器的错误信息
-    const errorMsg = error.message || '登录失败，请稍后重试';
+    // 友好的错误信息
+    let errorMsg = error.message || '登录失败';
+    
+    if (error.message.includes('timeout')) {
+      errorMsg = '登录超时，请检查网络连接或稍后重试';
+    } else if (error.message.includes('Failed to fetch') || error.message.includes('网络')) {
+      errorMsg = '网络连接失败，请确保后端服务正在运行';
+    } else if (error.message.includes('扩展通信')) {
+      errorMsg = '扩展通信错误，请重新加载扩展';
+    }
+    
     errorEl.textContent = errorMsg;
     errorEl.style.display = 'block';
+    
   } finally {
+    // 恢复按钮状态
     loginBtn.textContent = '登录';
     loginBtn.disabled = false;
+    console.log('=== 登录处理完成 ===');
   }
 }
 
