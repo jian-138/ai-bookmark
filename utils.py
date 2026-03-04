@@ -7,8 +7,10 @@ import json
 
 def generate_collection_id(user_id: str, content: str) -> str:
     """生成唯一的收藏ID"""
-    content_hash = hashlib.md5((user_id + content + str(datetime.now())).encode()).hexdigest()
-    return f"coll_{content_hash[:12]}"
+    import uuid
+    # 使用UUID生成唯一ID，确保格式正确
+    unique_id = str(uuid.uuid4())
+    return f"coll_{unique_id}"
 
 
 def extract_keywords(text: str, max_keywords: int = 10) -> list:
@@ -80,8 +82,15 @@ def merge_collection_with_analysis(collection: dict, analysis_result: dict) -> d
     """将收藏数据与AI分析结果合并"""
     updated_collection = collection.copy()
     
-    # 添加AI分析结果到收藏数据中
+    # 添加AI分析结果到收藏数据中（兼容前端字段名）
     updated_collection.update({
+        # 兼容前端显示的字段名
+        "keywords": analysis_result.get("keywords", []),
+        "category": analysis_result.get("category", ""),
+        "summary": analysis_result.get("summary", ""),
+        "confidence": analysis_result.get("confidence", 0.0),
+        "article_type": analysis_result.get("article_type", "其他"),
+        # 保留原始AI分析字段用于调试
         "ai_keywords": analysis_result.get("keywords", []),
         "ai_category": analysis_result.get("category", ""),
         "ai_summary": analysis_result.get("summary", ""),

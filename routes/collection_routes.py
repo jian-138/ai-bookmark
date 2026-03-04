@@ -5,15 +5,17 @@ from utils import generate_collection_id, extract_keywords, sanitize_input, vali
 from typing import List, Dict
 import time
 import json
+from datetime import datetime
 
 # 导入AI分析模块
 try:
     from ai.analyze import analyze_text, analyze_wechat_article
     from ai.cache import get_or_analyze_article
     AI_AVAILABLE = True
-except ImportError:
+    print("✅ AI分析模块加载成功")
+except ImportError as e:
     AI_AVAILABLE = False
-    print("警告: AI分析模块不可用")
+    print(f"❌ 警告: AI分析模块不可用 - {str(e)}")
 
 # 导入网页内容提取模块
 try:
@@ -103,6 +105,7 @@ async def collect_content(request: dict):
         "source_url": source_url,
         "keywords": keywords,
         "reading_time": reading_time,
+        "status": "PENDING",  # 添加状态字段
         "created_at": time.time(),
         "updated_at": time.time(),
         "content_source": "web_extract" if source_url and not original_text.strip() else "manual"
@@ -110,10 +113,12 @@ async def collect_content(request: dict):
     
     # 进行AI分析
     if AI_AVAILABLE:
+        print(f"🔍 开始AI分析，文本长度: {len(sanitized_text)}")
         try:
             # 根据来源选择分析函数
             if "mp.weixin.qq.com" in source_url if source_url else "":
                 # 微信文章分析
+                print("📱 检测到微信文章，使用微信分析函数")
                 analysis_result, err = get_or_analyze_article(
                     url=source_url,
                     content=sanitized_text,
@@ -122,15 +127,65 @@ async def collect_content(request: dict):
                 )
             else:
                 # 普通文本分析
+                print("📄 使用普通文本分析函数")
                 analysis_result, err = analyze_text(sanitized_text)
             
-            if analysis_result:
+            if err:
+                print(f"❌ AI分析失败: {err}")
+                collection["status"] = "AI_FAILED"
+                collection["ai_error"] = err
+                print(f"❌ AI分析失败，状态更新为: AI_FAILED")
+                
+                # 重要：更新存储中的收藏数据
+                for i, stored_collection in enumerate(collections_storage):
+                    if stored_collection['id'] == collection['id']:
+                        collections_storage[i] = collection
+                        print(f"   ✅ 已更新存储中的收藏数据（AI_FAILED）")
+                        break
+            elif analysis_result:
+                print(f"✅ AI分析成功，结果: {analysis_result}")
                 # 格式化分析结果
                 formatted_analysis = format_ai_analysis_result(analysis_result)
                 # 合并到收藏数据中
                 collection = merge_collection_with_analysis(collection, formatted_analysis)
+                # 更新状态为已分析
+                collection["status"] = "ANALYZED"
+                print(f"✅ AI分析完成，状态更新为: ANALYZED")
+                print(f"   关键词数量: {len(collection.get('keywords', []))}")
+                print(f"   分类: {collection.get('category', '')}")
+                print(f"   摘要长度: {len(collection.get('summary', ''))}")
+                
+                # 重要：更新存储中的收藏数据
+                for i, stored_collection in enumerate(collections_storage):
+                    if stored_collection['id'] == collection['id']:
+                        collections_storage[i] = collection
+                        print(f"   ✅ 已更新存储中的收藏数据")
+                        break
+            else:
+                print("⚠️ AI分析返回空结果")
+                collection["status"] = "AI_FAILED"
+                collection["ai_error"] = "分析结果为空"
+                print(f"❌ AI分析返回空结果，状态更新为: AI_FAILED")
+                
+            collection["updated_at"] = time.time()
+            
         except Exception as e:
-            print(f"AI分析过程中发生错误: {str(e)}")
+            print(f"❌ AI分析过程中发生异常: {str(e)}")
+            # 更新状态为分析失败
+            collection["status"] = "AI_FAILED"
+            collection["ai_error"] = str(e)
+            collection["updated_at"] = time.time()
+            print(f"❌ AI分析异常，状态更新为: AI_FAILED")
+            
+            # 重要：更新存储中的收藏数据
+            for i, stored_collection in enumerate(collections_storage):
+                if stored_collection['id'] == collection['id']:
+                    collections_storage[i] = collection
+                    print(f"   ✅ 已更新存储中的收藏数据（AI异常）")
+                    break
+    else:
+        print("⚠️ AI分析模块不可用，状态保持为PENDING")
+        collection["status"] = "PENDING"
     
     # 存储收藏
     collections_storage.append(collection)
@@ -138,8 +193,8 @@ async def collect_content(request: dict):
     return {
         "success": True,
         "message": "收藏成功！内容已提交AI分析",
-        "collection_id": collection_id,
-        "collect_id": collection_id  # 为了兼容性，同时提供collect_id字段
+        "collect_id": collection_id,
+        "collection_id": collection_id
     }
 
 
@@ -174,10 +229,10 @@ async def get_collections(request: Request):
     end_idx = start_idx + size
     paginated_collections = sorted_collections[start_idx:end_idx]
     
-    # 确保每个收藏项都有Chrome扩展期望的字段
+    # 确保每个收藏项都有 Chrome 扩展期望的字段
     formatted_collections = []
     for coll in paginated_collections:
-        # 确保有collect_id字段
+        # 确保有 collect_id 字段
         formatted_coll = coll.copy()
         if 'collect_id' not in formatted_coll:
             formatted_coll['collect_id'] = coll.get('id', coll.get('collection_id', 'unknown'))
@@ -185,30 +240,129 @@ async def get_collections(request: Request):
             formatted_coll['url'] = coll.get('source_url', '')
         if 'content' not in formatted_coll:
             formatted_coll['content'] = coll.get('original_text', '')
+        if 'status' not in formatted_coll:
+            formatted_coll['status'] = 'PENDING'
+        if 'created_at' in formatted_coll and isinstance(formatted_coll['created_at'], (int, float)):
+            formatted_coll['created_at'] = datetime.fromtimestamp(formatted_coll['created_at']).isoformat() + 'Z'
+        if 'updated_at' in formatted_coll and isinstance(formatted_coll['updated_at'], (int, float)):
+            formatted_coll['updated_at'] = datetime.fromtimestamp(formatted_coll['updated_at']).isoformat() + 'Z'
+        if 'created_at' not in formatted_coll:
+            formatted_coll['created_at'] = datetime.now().isoformat() + 'Z'
+        if 'updated_at' not in formatted_coll:
+            formatted_coll['updated_at'] = datetime.now().isoformat() + 'Z'
+        
+        # 添加前端期望的 AI 分析字段
+        if 'ai_keywords' not in formatted_coll:
+            formatted_coll['ai_keywords'] = coll.get('keywords', [])
+        if 'ai_category' not in formatted_coll:
+            formatted_coll['ai_category'] = coll.get('category', '')
+        if 'ai_confidence' not in formatted_coll:
+            formatted_coll['ai_confidence'] = coll.get('confidence', 0.0)
+        if 'summary' not in formatted_coll:
+            formatted_coll['summary'] = coll.get('summary', '')
+        if 'is_favorite' not in formatted_coll:
+            formatted_coll['is_favorite'] = coll.get('is_favorite', False)
+        if 'favorite_tags' not in formatted_coll:
+            formatted_coll['favorite_tags'] = coll.get('favorite_tags', [])
+            
         formatted_collections.append(formatted_coll)
     
     return CollectionListResponse(
         success=True,
-        collections=formatted_collections,
-        total=len(sorted_collections)
+        items=formatted_collections,
+        total=len(sorted_collections),
+        page=page,
+        size=size
     )
 
 
 @router.get("/api/v1/collections/{collection_id}", response_model=CollectionDetail)
 async def get_collection_detail(collection_id: str):
     """获取收藏详情"""
-    collection = next((coll for coll in collections_storage if coll['id'] == collection_id), None)
-    
-    if not collection:
+    try:
+        print(f"获取收藏详情：{collection_id}")
+        # 支持 collect_id 和 id 两种查询方式
+        collection = next((coll for coll in collections_storage if coll.get('id') == collection_id or coll.get('collect_id') == collection_id), None)
+        
+        if not collection:
+            print(f"收藏记录不存在：{collection_id}")
+            print(f"当前存储中的收藏 ID 列表：{[coll.get('id') for coll in collections_storage]}")
+            print(f"当前存储中的收藏 collect_id 列表：{[coll.get('collect_id') for coll in collections_storage]}")
+            return CollectionDetail(
+                success=False,
+                collection={}
+            )
+        
+        print(f"找到收藏记录：{collection_id}, 状态：{collection.get('status', '未知')}")
+        print(f"收藏记录的 id: {collection.get('id')}, collect_id: {collection.get('collect_id')}")
+        
+        # 确保返回的数据结构正确，兼容前端期望的字段格式
+        formatted_collection = collection.copy()
+        
+        # 确保有collect_id字段（前端期望的字段名）
+        if 'collect_id' not in formatted_collection:
+            formatted_collection['collect_id'] = collection_id
+        
+        # 确保有url字段（前端期望的字段名）
+        if 'url' not in formatted_collection:
+            formatted_collection['url'] = collection.get('source_url', '')
+        
+        # 确保有content字段（前端期望的字段名）
+        if 'content' not in formatted_collection:
+            formatted_collection['content'] = collection.get('original_text', '')
+        
+        # 确保有 status 字段
+        if 'status' not in formatted_collection:
+            formatted_collection['status'] = 'PENDING'
+        
+        # 确保有 keywords 字段（即使为空）
+        if 'keywords' not in formatted_collection:
+            formatted_collection['keywords'] = collection.get('keywords', [])
+        
+        # 确保有 category 字段（即使为空）
+        if 'category' not in formatted_collection:
+            formatted_collection['category'] = collection.get('category', '')
+        
+        # 确保有 summary 字段（即使为空）
+        if 'summary' not in formatted_collection:
+            formatted_collection['summary'] = collection.get('summary', '')
+        
+        # 确保有 confidence 字段（即使为 0）
+        if 'confidence' not in formatted_collection:
+            formatted_collection['confidence'] = collection.get('confidence', 0.0)
+        
+        # 添加前端期望的 AI 分析字段（兼容旧字段名）
+        if 'ai_keywords' not in formatted_collection:
+            formatted_collection['ai_keywords'] = collection.get('keywords', [])
+        if 'ai_category' not in formatted_collection:
+            formatted_collection['ai_category'] = collection.get('category', '')
+        if 'ai_confidence' not in formatted_collection:
+            formatted_collection['ai_confidence'] = collection.get('confidence', 0.0)
+        
+        # 添加收藏状态字段
+        if 'is_favorite' not in formatted_collection:
+            formatted_collection['is_favorite'] = collection.get('is_favorite', False)
+        if 'favorite_tags' not in formatted_collection:
+            formatted_collection['favorite_tags'] = collection.get('favorite_tags', [])
+        
+        # 处理时间戳格式
+        if 'created_at' in formatted_collection and isinstance(formatted_collection['created_at'], (int, float)):
+            formatted_collection['created_at'] = datetime.fromtimestamp(formatted_collection['created_at']).isoformat() + 'Z'
+        if 'updated_at' in formatted_collection and isinstance(formatted_collection['updated_at'], (int, float)):
+            formatted_collection['updated_at'] = datetime.fromtimestamp(formatted_collection['updated_at']).isoformat() + 'Z'
+        
+        return CollectionDetail(
+            success=True,
+            collection=formatted_collection
+        )
+    except Exception as e:
+        print(f"获取收藏详情异常: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return CollectionDetail(
             success=False,
             collection={}
         )
-    
-    return CollectionDetail(
-        success=True,
-        collection=collection
-    )
 
 
 @router.delete("/api/v1/collections/{collection_id}")

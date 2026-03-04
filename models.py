@@ -29,8 +29,10 @@ class CollectionResponse(BaseModel):
 
 class CollectionListResponse(BaseModel):
     success: bool
-    collections: List[dict]
+    items: List[dict]
     total: int
+    page: Optional[int] = 1
+    size: Optional[int] = 10
 
 
 class CollectionDetail(BaseModel):
@@ -112,3 +114,86 @@ class WeeklyReportDetailResponse(BaseModel):
     success: bool
     report: dict
     collections: List[dict]  # 关联的收藏内容
+
+
+# ========== 周报收藏和关键词搜索模型 ==========
+
+class WeeklyFavoriteRequest(BaseModel):
+    """周报收藏请求"""
+    user_id: str
+    collection_id: str
+    keywords: List[str]
+    weekly_report_id: Optional[str] = None
+    favorite_note: Optional[str] = None
+
+
+class WeeklyFavoriteData(BaseModel):
+    """周报收藏数据"""
+    id: str
+    user_id: str
+    collection_id: str
+    weekly_report_id: Optional[str] = None
+    keywords: List[str]
+    favorite_note: Optional[str] = None
+    created_at: str
+    expires_at: str
+
+
+class WeeklyFavoriteResponse(BaseModel):
+    """周报收藏响应"""
+    success: bool
+    message: str
+    favorite_id: Optional[str] = None
+    favorite_data: Optional[WeeklyFavoriteData] = None
+
+
+class FavoriteCollectionItem(BaseModel):
+    """收藏内容项"""
+    favorite: dict
+    collection: dict
+
+
+class WeeklyFavoriteListResponse(BaseModel):
+    """周报收藏列表响应"""
+    success: bool
+    items: List[FavoriteCollectionItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class KeywordSearchRequest(BaseModel):
+    """关键词搜索请求"""
+    user_id: str
+    keyword: str
+    exact_match: bool = False
+    favorites_only: bool = False
+    page: int = 1
+    page_size: int = 20
+
+
+class SearchCollectionItem(BaseModel):
+    """搜索收藏内容项"""
+    collection: dict
+    match_type: str  # 'exact', 'fuzzy', 'text'
+    matched_keyword: Optional[str] = None
+    matched_keywords: Optional[List[str]] = None
+
+
+class KeywordSearchResponse(BaseModel):
+    """关键词搜索响应"""
+    success: bool
+    items: List[SearchCollectionItem]
+    total: int
+    page: int
+    page_size: int
+    keyword: str
+    match_type: str
+    related_keywords: Optional[List[str]] = None
+
+
+class KeywordListResponse(BaseModel):
+    """关键词列表响应"""
+    success: bool
+    keywords: List[str]
+    total: int

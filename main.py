@@ -39,7 +39,7 @@ class LoginResponse(BaseModel):
     success: bool
     token: Optional[str] = None
     user_id: Optional[str] = None
-    message: Optional[str] = None
+    message: str
 
 # 收藏相关
 class CollectionRequest(BaseModel):
@@ -63,6 +63,8 @@ class CollectionItem(BaseModel):
     ai_category: Optional[str] = None
     summary: Optional[str] = None
     ai_confidence: Optional[float] = None
+    is_favorite: Optional[bool] = False
+    favorite_tags: Optional[List[str]] = None
     status: str
     created_at: str
     updated_at: str
@@ -146,11 +148,6 @@ async def internal_analyze(req: AnalyzeRequest):
 # --------- 内存存储（临时方案） ----------
 collections_storage = []  # 存储收藏记录
 
-# --------- 根路径 ----------
-@app.get("/")
-def root():
-    return {"message": "AI 收藏夹服务运行中"}
-
 # --------- 移动端 API ----------
 # 用户登录
 @app.post("/api/v1/auth/login", response_model=LoginResponse)
@@ -173,24 +170,58 @@ async def submit_collection(req: CollectionRequest, authorization: Optional[str]
     """提交收藏接口"""
     # 校验文本长度
     if len(req.original_text.strip()) < 10:
-        raise HTTPException(status_code=400, detail="TEXT_TOO_SHORT: 文本长度不足10个字符")
+        raise HTTPException(status_code=400, detail="TEXT_TOO_SHORT: 文本长度不足 10 个字符")
     
-    # 生成收藏ID
+    # 生成收藏 ID
     collect_id = "col_" + str(uuid.uuid4())
     created_at = datetime.utcnow().isoformat() + "Z"
     
+    # 初始化 AI 分析结果
+    ai_keywords = []
+    ai_category = ""
+    summary = req.original_text[:100]
+    ai_confidence = 0.0
+    status = "PENDING"
+    
+    # 调用 AI 分析
+    try:
+        from ai.analyze import analyze_text
+        from utils import format_ai_analysis_result
+        
+        print(f"🔍 开始 AI 分析，文本长度：{len(req.original_text.strip())}")
+        analysis_result, err = analyze_text(req.original_text.strip())
+        
+        if err:
+            print(f"❌ AI 分析失败：{err}")
+            status = "AI_FAILED"
+        elif analysis_result:
+            print(f"✅ AI 分析成功")
+            formatted_analysis = format_ai_analysis_result(analysis_result)
+            ai_keywords = formatted_analysis.get('keywords', [])
+            ai_category = formatted_analysis.get('category', '')
+            summary = formatted_analysis.get('summary', req.original_text[:100])
+            ai_confidence = formatted_analysis.get('confidence', 0.0)
+            status = "ANALYZED"
+        else:
+            print(f"⚠️ AI 分析返回空结果")
+            status = "AI_FAILED"
+    except Exception as e:
+        print(f"❌ AI 分析异常：{str(e)}")
+        status = "AI_FAILED"
+    
     # 保存到内存存储
     collection_item = {
+        "id": collect_id,  # 添加 id 字段，与 collect_id 相同
         "collect_id": collect_id,
         "user_id": req.user_id,
         "original_text": req.original_text,
         "url": req.url,
         "metadata": req.metadata,  # 直接保存字典
-        "ai_keywords": ["AI", "收藏"],  # TODO: 调用AI分析
-        "ai_category": "未分类",
-        "summary": req.original_text[:100],
-        "ai_confidence": 0.0,
-        "status": "PENDING",
+        "ai_keywords": ai_keywords,
+        "ai_category": ai_category,
+        "summary": summary,
+        "ai_confidence": ai_confidence,
+        "status": status,
         "created_at": created_at,
         "updated_at": created_at
     }
@@ -200,7 +231,7 @@ async def submit_collection(req: CollectionRequest, authorization: Optional[str]
         success=True,
         collect_id=collect_id,
         created_at=created_at,
-        message="收藏成功"
+        message="收藏成功！内容已提交 AI 分析"
     )
 
 # 查询单条收藏
@@ -272,18 +303,69 @@ async def get_collections(
 # 搜索收藏
 @app.get("/api/v1/collections/search", response_model=CollectionListResponse)
 async def search_collections(
-    query: str,
+    query: str,  # 必需的查询参数
+    keyword: Optional[str] = None,  # 可选的 keyword 参数（兼容）
     category: Optional[str] = None,
+    page: int = 1,
+    size: int = 20,
     authorization: Optional[str] = Header(None)
 ):
-    """搜索收藏"""
-    # TODO: 实现真实搜索逻辑
+    """搜索收藏 - 支持关键词搜索"""
+    # 使用 keyword 参数，如果提供了的话；否则使用 query
+    search_query = keyword or query
+    
+    if not search_query:
+        return CollectionListResponse(
+            success=True,
+            items=[],
+            total=0,
+            page=page,
+            size=size
+        )
+    
+    # 在内存存储中搜索
+    search_lower = search_query.lower()
+    matched_items = []
+    
+    for item in collections_storage:
+        # 搜索标题、内容、关键词、分类
+        if (search_lower in item.get('original_text', '').lower() or
+            search_lower in ' '.join(item.get('ai_keywords', [])).lower() or
+            search_lower in item.get('ai_category', '').lower() or
+            search_lower in item.get('url', '').lower()):
+            matched_items.append(item)
+    
+    # 分页
+    start = (page - 1) * size
+    end = start + size
+    items = matched_items[start:end]
+    
+    # 转换为 CollectionItem 格式
+    collection_items = [
+        CollectionItem(
+            collect_id=item["collect_id"],
+            user_id=item["user_id"],
+            original_text=item["original_text"],
+            url=item.get("url"),
+            ai_keywords=item.get("ai_keywords", []),
+            ai_category=item.get("ai_category", "未分类"),
+            summary=item.get("summary"),
+            ai_confidence=item.get("ai_confidence", 0.0),
+            is_favorite=item.get("is_favorite", False),
+            favorite_tags=item.get("favorite_tags", []),
+            status=item["status"],
+            created_at=item["created_at"],
+            updated_at=item["updated_at"]
+        )
+        for item in items
+    ]
+    
     return CollectionListResponse(
         success=True,
-        items=[],  # 改为items
-        total=0,
-        page=1,
-        size=20
+        items=collection_items,
+        total=len(matched_items),
+        page=page,
+        size=size
     )
 
 # 删除收藏
@@ -293,6 +375,137 @@ async def delete_collection(collect_id: str, authorization: Optional[str] = Head
     global collections_storage
     collections_storage = [item for item in collections_storage if item["collect_id"] != collect_id]
     return {"success": True, "message": "删除成功"}
+
+# 生成周报
+class WeeklyReportRequest(BaseModel):
+    user_id: str
+    week_start: Optional[str] = None  # ISO 格式日期字符串
+    week_end: Optional[str] = None
+
+class WeeklyReportItem(BaseModel):
+    report_id: str
+    user_id: str
+    week_start: str
+    week_end: str
+    total_count: int
+    favorite_count: int
+    top_keywords: List[str]
+    top_categories: List[str]
+    summary: str
+    created_at: str
+
+class WeeklyReportResponse(BaseModel):
+    success: bool
+    data: Optional[WeeklyReportItem] = None
+    message: Optional[str] = None
+
+# 内存存储周报
+weekly_reports_storage = []
+
+@app.post("/api/v1/weekly-report/generate", response_model=WeeklyReportResponse)
+async def generate_weekly_report(req: WeeklyReportRequest):
+    """生成本周周报"""
+    from datetime import datetime, timedelta
+    
+    # 如果没有指定日期范围，使用本周
+    if not req.week_start or not req.week_end:
+        # 获取本周一和周日
+        today = datetime.utcnow()
+        week_start = today - timedelta(days=today.weekday())
+        week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+    else:
+        week_start = datetime.fromisoformat(req.week_start.replace('Z', '+00:00'))
+        week_end = datetime.fromisoformat(req.week_end.replace('Z', '+00:00'))
+    
+    # 筛选本周的收藏
+    week_items = []
+    for item in collections_storage:
+        if item["user_id"] != req.user_id:
+            continue
+        
+        try:
+            created_at = datetime.fromisoformat(item["created_at"].replace('Z', '+00:00'))
+            if week_start <= created_at <= week_end:
+                week_items.append(item)
+        except:
+            # 如果日期解析失败，也包含进来
+            week_items.append(item)
+    
+    # 统计关键词
+    keyword_count = {}
+    category_count = {}
+    
+    for item in week_items:
+        # 统计关键词
+        for kw in item.get('ai_keywords', []):
+            keyword_count[kw] = keyword_count.get(kw, 0) + 1
+        
+        # 统计分类
+        categories = item.get('ai_category', '').split(',')
+        for cat in categories:
+            cat = cat.strip()
+            if cat:
+                category_count[cat] = category_count.get(cat, 0) + 1
+    
+    # 获取 Top 5 关键词和分类
+    top_keywords = sorted(keyword_count.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_categories = sorted(category_count.items(), key=lambda x: x[1], reverse=True)[:3]
+    
+    # 生成摘要
+    summary = f"本周共收藏 {len(week_items)} 条内容"
+    if top_keywords:
+        summary += f"，主要关键词：{', '.join([kw[0] for kw in top_keywords[:3]])}"
+    if top_categories:
+        summary += f"，主要分类：{', '.join([cat[0] for cat in top_categories])}"
+    summary += "。"
+    
+    # 生成周报
+    report_id = "report_" + str(uuid.uuid4())
+    report = WeeklyReportItem(
+        report_id=report_id,
+        user_id=req.user_id,
+        week_start=week_start.isoformat() + "Z",
+        week_end=week_end.isoformat() + "Z",
+        total_count=len(week_items),
+        favorite_count=len([i for i in week_items if i.get('status') == 'ANALYZED']),
+        top_keywords=[kw[0] for kw in top_keywords],
+        top_categories=[cat[0] for cat in top_categories],
+        summary=summary,
+        created_at=datetime.utcnow().isoformat() + "Z"
+    )
+    
+    # 保存到内存存储
+    weekly_reports_storage.append(report.dict())
+    
+    return WeeklyReportResponse(
+        success=True,
+        data=report,
+        message="周报生成成功"
+    )
+
+@app.get("/api/v1/weekly-report/list", response_model=WeeklyReportResponse)
+async def list_weekly_reports(
+    user_id: str,
+    page: int = 1,
+    size: int = 10
+):
+    """获取周报列表"""
+    # 筛选用户的周报
+    user_reports = [r for r in weekly_reports_storage if r.get('user_id') == user_id]
+    
+    # 按时间倒序排序
+    user_reports.sort(key=lambda x: x.get('week_end', ''), reverse=True)
+    
+    # 分页
+    start = (page - 1) * size
+    end = start + size
+    reports = user_reports[start:end]
+    
+    return WeeklyReportResponse(
+        success=True,
+        data=reports[0] if reports else None,
+        message=f"共 {len(user_reports)} 条周报"
+    )
 
 # 解析微信公众号文章
 @app.post("/api/v1/article/parse", response_model=ArticleParseResponse)
@@ -414,10 +627,54 @@ app.include_router(auth_router)
 app.include_router(collection_router)
 app.include_router(wechat_router)
 
-# 延迟导入并注册周报路由
-from routes.weekly_report_routes import router as weekly_report_router
-app.include_router(weekly_report_router)
+# 注册周报相关路由（FastAPI 版本）
+from backend.routes.weekly_favorites import router as weekly_favorites_router
+app.include_router(weekly_favorites_router)
 
-# --------- 启动定时任务 ----------
-from scheduler import start_scheduler
-start_scheduler()
+# --------- 根路径和健康检查接口（必须在路由注册之后） ----------
+@app.get("/")
+def root():
+    return {"message": "AI 收藏夹服务运行中"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "message": "服务运行正常"}
+
+# --------- 应用启动事件 ----------
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时初始化数据库"""
+    try:
+        from backend.database import init_db
+        print("📦 初始化数据库...")
+        await init_db()
+        print("✅ 数据库初始化成功")
+    except Exception as e:
+        print(f"⚠️ 数据库初始化警告：{str(e)}")
+    
+    # 启动定时任务
+    try:
+        from scheduler import start_scheduler
+        start_scheduler()
+        print("⏰ 定时任务调度器已启动")
+    except Exception as e:
+        print(f"⚠️ 定时任务启动警告：{str(e)}")
+
+# --------- 应用关闭事件 ----------
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时清理资源"""
+    try:
+        from backend.database import close_db
+        await close_db()
+        print("👋 数据库连接已关闭")
+    except Exception as e:
+        print(f"⚠️ 清理资源警告：{str(e)}")
+
+# --------- 启动 FastAPI 服务 ----------
+if __name__ == "__main__":
+    import uvicorn
+    print("🚀 启动 AI 书签后端服务...")
+    print(f"📡 服务地址：http://localhost:8000")
+    print(f"📚 API 文档：http://localhost:8000/docs")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

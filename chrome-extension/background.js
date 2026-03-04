@@ -1,6 +1,6 @@
 // background.js - Service Worker for Chrome Extension
 // API配置
-const API_BASE_URL = 'http://localhost:8000';  // 改为localhost，因为服务器实际只监听在localhost
+const API_BASE_URL = 'http://127.0.0.1:8000';  // 使用127.0.0.1避免localhost解析问题
 const API_BASE_URL_PRODUCTION = 'https://ai-bookmark-production.up.railway.app';
 
 // 使用本地API（可在设置中切换）
@@ -48,14 +48,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.action === 'login') {
     login(request.username, request.password)
-      .then(result => sendResponse({ success: true, data: result }))
+      .then(result => sendResponse(result))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
   
   if (request.action === 'getCollections') {
     getCollections(request.page, request.size)
-      .then(result => sendResponse({ success: true, data: result }))
+      .then(result => sendResponse(result))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
@@ -71,11 +71,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getWeeklyReports') {
     getWeeklyReports(request.userId, request.page, request.size)
       .then(result => {
-        console.log('周报API调用成功，返回数据:', result);
+        console.log('周报 API 调用成功，返回数据:', result);
         sendResponse(result);
       })
       .catch(error => {
-        console.error('周报API调用失败:', error);
+        console.error('周报 API 调用失败:', error);
         sendResponse({ success: false, error: error.message });
       });
     return true; // 保持消息通道开放
@@ -106,59 +106,162 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     return true;
   }
+
+  // 搜索功能
+  if (request.action === 'searchCollections') {
+    searchCollections(request.keyword, request.exactMatch, request.favoritesOnly, request.page, request.size)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  // 生成周报
+  if (request.action === 'generateWeeklyReport') {
+    generateWeeklyReport(request.userId)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
+
+// 增强的网络请求函数
+async function fetchWithRetry(url, options = {}, maxRetries = 2) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      // 延长超时时间到 15 秒，避免请求被意外中止
+      const timeoutId = setTimeout(() => {
+        console.log(`请求超时 (${attempt}/${maxRetries}): ${url}`);
+        controller.abort('Request timeout');
+      }, 15000);
+      
+      // 保持 Service Worker 活跃直到请求完成
+      const keepAlive = setInterval(() => {
+        console.log('Keeping service worker alive...');
+      }, 5000);
+      
+      let response;
+      try {
+        response = await fetch(url, {
+          ...options,
+          signal: controller.signal
+        });
+      } catch (fetchError) {
+        // 清理定时器
+        clearTimeout(timeoutId);
+        clearInterval(keepAlive);
+        
+        // 处理 abort 错误
+        if (fetchError.name === 'AbortError') {
+          const abortReason = fetchError.message || 'Request aborted';
+          console.error(`请求被中止 (尝试 ${attempt}/${maxRetries}):`, abortReason);
+          throw new Error(`网络连接超时，请检查后端服务是否正在运行 (尝试 ${attempt}/${maxRetries})`);
+        }
+        
+        // 处理网络错误
+        if (fetchError.name === 'TypeError') {
+          throw new Error('无法连接到服务器，请检查后端服务是否正在运行 (http://localhost:8000)');
+        }
+        
+        throw fetchError;
+      }
+      
+      clearTimeout(timeoutId);
+      clearInterval(keepAlive);
+      
+      // 如果是 5xx 错误，尝试重试
+      if (response.status >= 500) {
+        throw new Error(`服务器错误：HTTP ${response.status}`);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error(`请求失败 (尝试 ${attempt}/${maxRetries}):`, error.message);
+      
+      if (attempt === maxRetries) {
+        // 最后一次尝试失败，提供详细的错误信息
+        if (error.message.includes('abort')) {
+          throw new Error('请求超时，后端服务可能未响应。请确保服务正在运行 (http://localhost:8000)');
+        }
+        throw error;
+      }
+      
+      // 等待一段时间后重试（指数退避）
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+}
 
 // 用户登录
 async function login(username, password) {
   try {
-    console.log('Attempting login to:', `${currentApiUrl}/api/v1/auth/login`); // 调试日志
+    const loginUrl = `${currentApiUrl}/api/v1/auth/login`;
+    console.log('=== 登录请求开始 ===');
+    console.log('API 地址:', loginUrl);
+    console.log('用户名:', username);
     
-    const response = await fetch(`${currentApiUrl}/api/v1/auth/login`, {
+    const response = await fetchWithRetry(loginUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // 添加更多请求头以提高兼容性
         'Accept': 'application/json',
         'Cache-Control': 'no-cache'
       },
       body: JSON.stringify({ username, password }),
-      // 设置超时和重试机制
       mode: 'cors',
-      credentials: 'omit', // 根据需要调整
+      credentials: 'omit',
       cache: 'no-cache',
       redirect: 'follow',
       referrer: 'no-referrer',
     });
     
-    console.log('Login response status:', response.status); // 调试日志
+    console.log('响应状态码:', response.status);
     
     if (!response.ok) {
-      // 处理HTTP错误状态
       const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+      console.error('HTTP 错误:', response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText || '服务器错误'}`);
     }
     
     const data = await response.json();
-    console.log('Login response data:', data); // 调试日志
+    console.log('响应数据:', data);
     
     if (data.success) {
-      // 保存token和用户信息
+      console.log('登录成功，保存用户信息');
+      // 保存 token 和用户信息
       await chrome.storage.local.set({
         token: data.token,
         userId: data.user_id,
         isLoggedIn: true
       });
+      console.log('用户信息已保存');
       return data;
     } else {
-      throw new Error(data.message || data.error || '登录失败');
+      const errorMsg = data.message || data.error || '登录失败';
+      console.error('登录失败:', errorMsg);
+      throw new Error(errorMsg);
     }
   } catch (error) {
-    console.error('Login error:', error);
-    // 更具体的错误信息
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+    console.error('=== 登录错误 ===');
+    console.error('错误类型:', error.name);
+    console.error('错误消息:', error.message);
+    
+    // 提供更友好的错误信息
+    let userFriendlyError = error.message;
+    
+    if (error.name === 'AbortError') {
+      userFriendlyError = '登录请求超时，请检查后端服务是否正在运行';
+    } else if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
+      userFriendlyError = '无法连接到服务器，请确保后端服务正在运行 (http://localhost:8000)';
+    } else if (error.message.includes('HTTP 5')) {
+      userFriendlyError = '服务器错误，请稍后重试';
     }
-    throw error;
+    
+    throw { 
+      name: 'LoginError',
+      message: userFriendlyError,
+      originalError: error.message
+    };
   }
 }
 
@@ -177,7 +280,7 @@ async function collectText(text, url, tab) {
     
     console.log('Sending request to API with token:', storage.token ? 'TOKEN_PRESENT' : 'NO_TOKEN'); // 调试日志
     
-    const response = await fetch(`${currentApiUrl}/api/v1/collect`, {
+    const response = await fetchWithRetry(`${currentApiUrl}/api/v1/collect`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -263,7 +366,7 @@ async function collectWebPage(url, tab) {
     }
     
     // 发送收藏请求，只提供URL，让后端自动提取内容
-    const response = await fetch(`${currentApiUrl}/api/v1/collect`, {
+    const response = await fetchWithRetry(`${currentApiUrl}/api/v1/collect`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -338,16 +441,30 @@ async function collectWebPage(url, tab) {
 }
 
 // 获取收藏列表
-async function getCollections(page = 1, size = 20) {
+async function getCollections(page = 1, size = 20, userId = null) {
   try {
-    const storage = await chrome.storage.local.get(['token', 'isLoggedIn']);
+    console.log(`[getCollections] 开始加载，page=${page}, size=${size}, userId=${userId || '使用存储中的 ID'}`);
+    
+    const storage = await chrome.storage.local.get(['token', 'isLoggedIn', 'userId']);
     
     if (!storage.isLoggedIn || !storage.token) {
+      console.error('[getCollections] 用户未登录');
       throw new Error('请先登录');
     }
     
-    const response = await fetch(
-      `${currentApiUrl}/api/v1/collections?page=${page}&size=${size}`,
+    // 如果没有传入 userId，使用存储中的 userId
+    const finalUserId = userId || storage.userId;
+    
+    // 构建 URL，添加 user_id 参数
+    let url = `${currentApiUrl}/api/v1/collections?page=${page}&size=${size}`;
+    if (finalUserId) {
+      url += `&user_id=${encodeURIComponent(finalUserId)}`;
+    }
+    
+    console.log(`[getCollections] 请求 URL: ${url}`);
+    
+    const response = await fetchWithRetry(
+      url,
       {
         method: 'GET',
         headers: {
@@ -363,18 +480,23 @@ async function getCollections(page = 1, size = 20) {
       }
     );
     
+    console.log(`[getCollections] 响应状态码：${response.status}`);
+    
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`[getCollections] HTTP 错误：${response.status}`, errorText);
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log(`[getCollections] 成功获取 ${data.items?.length || 0} 条收藏`);
+    return data;
   } catch (error) {
-    console.error('Get collections error:', error);
+    console.error('[getCollections] 错误详情:', error);
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error('网络连接失败，请确保后端服务正在运行 (http://localhost:8000)');
     }
     
     throw error;
@@ -511,4 +633,105 @@ function showNotification(title, message) {
     message: message,
     priority: 2
   });
+}
+
+// ========== 搜索功能 ==========
+
+async function searchCollections(keyword, exactMatch = false, favoritesOnly = true, page = 1, size = 20) {
+  try {
+    const storage = await chrome.storage.local.get(['token', 'isLoggedIn', 'userId']);
+    
+    if (!storage.isLoggedIn || !storage.token) {
+      throw new Error('请先登录');
+    }
+    
+    // 构建搜索 URL - 使用 query 参数而不是 keyword
+    let url = `${currentApiUrl}/api/v1/collections/search?query=${encodeURIComponent(keyword)}&page=${page}&size=${size}`;
+    
+    if (exactMatch) {
+      url += '&exact_match=true';
+    }
+    
+    if (favoritesOnly) {
+      url += '&favorites_only=true';
+    }
+    
+    console.log('搜索 URL:', url);
+    
+    const response = await fetchWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${storage.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-cache',
+      redirect: 'follow',
+      referrer: 'no-referrer',
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('搜索结果:', data);
+    
+    return data;
+  } catch (error) {
+    console.error('搜索失败:', error);
+    
+    // 更具体的错误信息
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+    }
+    
+    throw error;
+  }
+}
+
+// ========== 周报生成功能 ==========
+
+async function generateWeeklyReport(userId) {
+  try {
+    console.log('生成周报，用户 ID:', userId);
+    
+    const response = await fetchWithRetry(`${currentApiUrl}/api/v1/weekly-report/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        user_id: userId
+      }),
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-cache',
+      redirect: 'follow',
+      referrer: 'no-referrer',
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('周报生成响应:', data);
+    
+    return data;
+  } catch (error) {
+    console.error('生成周报失败:', error);
+    
+    // 更具体的错误信息
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+    }
+    
+    throw error;
+  }
 }

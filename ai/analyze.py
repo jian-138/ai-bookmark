@@ -136,7 +136,9 @@ WECHAT_PROMPT_TEMPLATE = """
 print(">>> call_siliconflow NEW VERSION LOADED")
 
 def call_siliconflow(prompt: str):
+    """调用SiliconFlow API进行AI分析"""
     if not API_KEY:
+        print("❌ AI分析失败: 未设置API Key")
         return FALLBACK, "未设置 API Key"
 
     headers = {
@@ -153,29 +155,50 @@ def call_siliconflow(prompt: str):
         "temperature": 0.2,
     }
 
+    print(f"🔍 发送AI分析请求到: {ENDPOINT}")
+    print(f"请求内容长度: {len(prompt)} 字符")
+    print(f"请求内容预览: {prompt[:200]}...")
+
     try:
         resp = requests.post(ENDPOINT, headers=headers, json=payload, timeout=90)
+
+        print(f"📡 AI分析响应状态码: {resp.status_code}")
+        
+        if resp.status_code != 200:
+            error_msg = f"硅基流动错误: {resp.status_code} {resp.text}"
+            print(f"❌ {error_msg}")
+            return FALLBACK, error_msg
+
+        data = resp.json()
+        raw = data["choices"][0]["message"]["content"]
 
         print("=== SiliconFlow Raw Response ===")
         print(resp.text[:1200])
         print("================================")
 
-        if resp.status_code != 200:
-            return FALLBACK, f"硅基流动错误: {resp.status_code} {resp.text}"
-
-        data = resp.json()
-        raw = data["choices"][0]["message"]["content"]
-
         parsed = extract_json(raw)
 
         if not parsed:
-            return FALLBACK, f"JSON 解析失败，原始输出: {raw[:300]}"
+            error_msg = f"JSON 解析失败，原始输出: {raw[:300]}"
+            print(f"❌ {error_msg}")
+            return FALLBACK, error_msg
 
         fixed = fix_schema(parsed)
+        print(f"✅ AI分析成功，结果: {fixed}")
         return fixed, None
 
+    except requests.exceptions.Timeout:
+        error_msg = "AI分析请求超时（90秒）"
+        print(f"❌ {error_msg}")
+        return FALLBACK, error_msg
+    except requests.exceptions.ConnectionError:
+        error_msg = "无法连接到AI服务，请检查网络"
+        print(f"❌ {error_msg}")
+        return FALLBACK, error_msg
     except Exception as e:
-        return FALLBACK, f"调用异常: {str(e)}"
+        error_msg = f"调用异常: {str(e)}"
+        print(f"❌ {error_msg}")
+        return FALLBACK, error_msg
 
 
 def analyze_text(text: str):

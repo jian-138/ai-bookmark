@@ -107,6 +107,13 @@ backend/instance/
 backend/*.db
 backend/*.sqlite
 
+# Database files (root)
+*.db
+!ai_bookmark.db
+
+# Backup directories
+backup/
+
 # IDE and Editor
 .kiro/
 .qoder/
