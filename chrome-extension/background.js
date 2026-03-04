@@ -1,10 +1,10 @@
 // background.js - Service Worker for Chrome Extension
-// API配置
-const API_BASE_URL = 'http://127.0.0.1:8000';  // 使用127.0.0.1避免localhost解析问题
-const API_BASE_URL_PRODUCTION = 'https://ai-bookmark-production.up.railway.app';
 
-// 使用本地API（可在设置中切换）
-let currentApiUrl = API_BASE_URL;
+// 导入API配置
+import { API_CONFIG } from './config.js';
+
+// API配置（从config.js获取）
+let currentApiUrl = API_CONFIG.apiUrl;
 
 // 离线缓存队列
 let offlineQueue = [];
@@ -160,7 +160,7 @@ async function fetchWithRetry(url, options = {}, maxRetries = 2) {
         
         // 处理网络错误
         if (fetchError.name === 'TypeError') {
-          throw new Error('无法连接到服务器，请检查后端服务是否正在运行 (http://localhost:8000)');
+          throw new Error(`无法连接到服务器，请检查后端服务是否正在运行 (${currentApiUrl})`);
         }
         
         throw fetchError;
@@ -181,7 +181,7 @@ async function fetchWithRetry(url, options = {}, maxRetries = 2) {
       if (attempt === maxRetries) {
         // 最后一次尝试失败，提供详细的错误信息
         if (error.message.includes('abort')) {
-          throw new Error('请求超时，后端服务可能未响应。请确保服务正在运行 (http://localhost:8000)');
+          throw new Error(`请求超时，后端服务可能未响应。请确保服务正在运行 (${currentApiUrl})`);
         }
         throw error;
       }
@@ -252,7 +252,7 @@ async function login(username, password) {
     if (error.name === 'AbortError') {
       userFriendlyError = '登录请求超时，请检查后端服务是否正在运行';
     } else if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
-      userFriendlyError = '无法连接到服务器，请确保后端服务正在运行 (http://localhost:8000)';
+      userFriendlyError = `无法连接到服务器，请确保后端服务正在运行 (${currentApiUrl})`;
     } else if (error.message.includes('HTTP 5')) {
       userFriendlyError = '服务器错误，请稍后重试';
     }
@@ -346,7 +346,7 @@ async function collectText(text, url, tab) {
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error(`网络连接失败，请检查后端服务是否正在运行 (${currentApiUrl})`);
     }
     
     throw error;
@@ -433,7 +433,7 @@ async function collectWebPage(url, tab) {
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error(`网络连接失败，请检查后端服务是否正在运行 (${currentApiUrl})`);
     }
     
     throw error;
@@ -496,7 +496,7 @@ async function getCollections(page = 1, size = 20, userId = null) {
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请确保后端服务正在运行 (http://localhost:8000)');
+      throw new Error(`网络连接失败，请确保后端服务正在运行 (${currentApiUrl})`);
     }
     
     throw error;
@@ -686,7 +686,7 @@ async function searchCollections(keyword, exactMatch = false, favoritesOnly = tr
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error(`网络连接失败，请检查后端服务是否正在运行 (${currentApiUrl})`);
     }
     
     throw error;
@@ -729,7 +729,7 @@ async function generateWeeklyReport(userId) {
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('网络连接失败，请检查后端服务是否正在运行 (http://localhost:8000)');
+      throw new Error(`网络连接失败，请检查后端服务是否正在运行 (${currentApiUrl})`);
     }
     
     throw error;

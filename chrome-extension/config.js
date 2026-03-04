@@ -2,7 +2,7 @@
 const Config = {
   // 开发环境配置
   development: {
-    apiUrl: 'http://localhost:8001',  // 更新为实际运行的端口
+    apiUrl: 'http://localhost:8000',  // 后端服务运行在8000端口
     name: 'Development'
   },
   
