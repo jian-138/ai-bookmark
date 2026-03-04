@@ -124,16 +124,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// 增强的网络请求函数
-async function fetchWithRetry(url, options = {}, maxRetries = 2) {
+// 增强的网络请求函数 - 优化超时和重试逻辑
+async function fetchWithRetry(url, options = {}, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      // 延长超时时间到 15 秒，避免请求被意外中止
+      // 动态调整超时时间：第一次15秒，后续尝试增加时间
+      const timeoutSeconds = attempt === 1 ? 15000 : attempt * 10000; // 15s, 20s, 30s
       const timeoutId = setTimeout(() => {
-        console.log(`请求超时 (${attempt}/${maxRetries}): ${url}`);
+        console.log(`请求超时 (${attempt}/${maxRetries}): ${url} (超时: ${timeoutSeconds/1000}s)`);
         controller.abort('Request timeout');
-      }, 15000);
+      }, timeoutSeconds);
       
       // 保持 Service Worker 活跃直到请求完成
       const keepAlive = setInterval(() => {
@@ -455,6 +456,11 @@ async function getCollections(page = 1, size = 20, userId = null) {
     // 如果没有传入 userId，使用存储中的 userId
     const finalUserId = userId || storage.userId;
     
+    if (!finalUserId) {
+      console.error('[getCollections] 缺少用户ID');
+      throw new Error('缺少用户ID，请重新登录');
+    }
+    
     // 构建 URL，添加 user_id 参数
     let url = `${currentApiUrl}/api/v1/collections?page=${page}&size=${size}`;
     if (finalUserId) {
@@ -462,6 +468,10 @@ async function getCollections(page = 1, size = 20, userId = null) {
     }
     
     console.log(`[getCollections] 请求 URL: ${url}`);
+    console.log(`[getCollections] 用户ID: ${finalUserId}`);
+    console.log(`[getCollections] Token存在: ${!!storage.token}`);
+    
+    console.log(`[getCollections] 发送请求到: ${url}`);
     
     const response = await fetchWithRetry(
       url,
@@ -480,6 +490,8 @@ async function getCollections(page = 1, size = 20, userId = null) {
       }
     );
     
+    console.log(`[getCollections] 响应状态: ${response.status}`);
+    
     console.log(`[getCollections] 响应状态码：${response.status}`);
     
     if (!response.ok) {
@@ -492,11 +504,20 @@ async function getCollections(page = 1, size = 20, userId = null) {
     console.log(`[getCollections] 成功获取 ${data.items?.length || 0} 条收藏`);
     return data;
   } catch (error) {
-    console.error('[getCollections] 错误详情:', error);
+    console.error('[getCollections] 加载失败:', error);
+    console.error('[getCollections] 错误详情:', {
+      name: error.name,
+      message: error.message,
+      url: error.config?.url || 'unknown'
+    });
     
     // 更具体的错误信息
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error(`网络连接失败，请确保后端服务正在运行 (${currentApiUrl})`);
+      throw new Error(`网络连接失败，请检查后端服务是否正在运行 (${currentApiUrl})`);
+    } else if (error.message.includes('timeout')) {
+      throw new Error(`请求超时，请稍后重试 (${currentApiUrl})`);
+    } else if (error.message.includes('Failed to fetch')) {
+      throw new Error(`无法连接到服务器，请检查网络设置 (${currentApiUrl})`);
     }
     
     throw error;

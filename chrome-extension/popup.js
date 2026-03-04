@@ -1,4 +1,88 @@
 // popup.js - Popup 界面逻辑
+// 收藏列表加载器 - 简单的重试机制
+class CollectionLoader {
+  constructor() {
+    this.retryCount = 0;
+    this.maxRetries = 3;
+    this.isLoading = false;
+  }
+
+  async loadWithRetry(fetchFunction) {
+    this.retryCount = 0;
+    
+    while (this.retryCount < this.maxRetries) {
+      try {
+        console.log(`[CollectionLoader] 尝试 ${this.retryCount + 1}/${this.maxRetries}`);
+        const result = await fetchFunction();
+        return { success: true, data: result };
+      } catch (error) {
+        this.retryCount++;
+        console.error(`[CollectionLoader] 第${this.retryCount}次尝试失败:`, error.message);
+        
+        if (this.retryCount >= this.maxRetries) {
+          throw new Error(`加载失败 (${this.retryCount}次尝试): ${error.message}`);
+        }
+        
+        // 等待一段时间后重试
+        const waitTime = Math.min(1000 * this.retryCount, 3000);
+        console.log(`[CollectionLoader] 等待 ${waitTime}ms 后重试...`);
+        await this.sleep(waitTime);
+      }
+    }
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+/**
+ * 获取收藏列表（带超时处理）
+ */
+async function fetchCollectionsWithTimeout() {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('请求超时 (30秒)'));
+    }, 30000); // 30秒超时
+
+    chrome.storage.local.get(['userId'], (storage) => {
+      const userId = storage.userId;
+      
+      if (!userId) {
+        clearTimeout(timeout);
+        reject(new Error('用户未登录'));
+        return;
+      }
+
+      console.log(`[fetchCollectionsWithTimeout] 获取收藏列表，用户ID: ${userId}`);
+
+      chrome.runtime.sendMessage({
+        action: 'getCollections',
+        page: 1,
+        size: 20,
+        userId: userId
+      }, (response) => {
+        clearTimeout(timeout);
+
+        if (chrome.runtime.lastError) {
+          reject(new Error('扩展通信错误: ' + chrome.runtime.lastError.message));
+          return;
+        }
+
+        if (!response) {
+          reject(new Error('未收到服务器响应'));
+          return;
+        }
+
+        resolve(response);
+      });
+    });
+  });
+}
+
+// 创建加载器实例
+const collectionLoader = new CollectionLoader();
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -210,8 +294,63 @@ function renderCollections(collections) {
   listEl.innerHTML = html;
 }
 
-// 加载收藏列表
+// 加载收藏列表 - 使用重试机制
 async function loadCollections() {
+  console.log('[loadCollections] 开始加载收藏列表...');
+  
+  if (collectionLoader.isLoading) {
+    console.log('[loadCollections] 正在加载中，跳过重复请求');
+    return;
+  }
+  
+  const listEl = document.getElementById('collections-list');
+  listEl.innerHTML = '<div class="loading">加载中...</div>';
+  
+  try {
+    // 使用重试机制加载收藏列表
+    const result = await collectionLoader.loadWithRetry(async () => {
+      return await fetchCollectionsWithTimeout();
+    });
+    
+    console.log('[loadCollections] 加载成功:', result);
+    
+    if (result.success && result.data) {
+      const response = result.data;
+      const collections = response.items || response.data || [];
+      const total = response.total || collections.length;
+      
+      console.log(`[loadCollections] 获取到 ${collections.length} 条收藏，总计 ${total} 条`);
+      
+      if (collections.length > 0) {
+        renderCollections(collections);
+        const totalCountEl = document.getElementById('total-count');
+        if (totalCountEl) {
+          totalCountEl.textContent = total;
+        }
+      } else {
+        listEl.innerHTML = '<div class="empty">暂无收藏</div>';
+      }
+    } else {
+      throw new Error('加载失败');
+    }
+    
+  } catch (error) {
+    console.error('[loadCollections] 最终加载失败:', error);
+    
+    // 显示最终错误
+    listEl.innerHTML = `
+      <div class="error">
+        <p>❌ 加载失败: ${error.message}</p>
+        <small>请检查网络连接或稍后重试</small>
+        <button onclick="loadCollections()" class="retry-btn">重试</button>
+      </div>
+    `;
+  }
+}
+
+// 原始加载方法 - 作为回退
+async function loadCollectionsFallback() {
+  console.log('[loadCollectionsFallback] 使用回退方法加载...');
   const listEl = document.getElementById('collections-list');
   listEl.innerHTML = '<div class="loading">加载中...</div>';
   
@@ -219,68 +358,64 @@ async function loadCollections() {
     // 获取当前用户 ID
     const storage = await chrome.storage.local.get(['userId']);
     const userId = storage.userId;
+    console.log(`[loadCollectionsFallback] 用户ID: ${userId}`);
     
-    // 添加超时处理
+    if (!userId) {
+      throw new Error('用户未登录');
+    }
+    
+    // 使用更长的超时时间
     const response = await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('加载收藏列表超时，请检查后端服务是否正在运行'));
-      }, 20000); // 增加到 20 秒超时
+        reject(new Error('加载收藏列表超时，请检查网络连接'));
+      }, 45000); // 45 秒超时
       
       chrome.runtime.sendMessage({
         action: 'getCollections',
         page: 1,
         size: 20,
-        userId: userId  // 传递 userId
+        userId: userId
       }, (response) => {
         clearTimeout(timeout);
         if (chrome.runtime.lastError) {
-          console.error('Chrome runtime error:', chrome.runtime.lastError);
-          reject(new Error('扩展通信错误：' + chrome.runtime.lastError.message));
+          reject(new Error('扩展通信错误'));
         } else if (!response) {
-          reject(new Error('未收到服务器响应，请检查后端服务是否正在运行'));
+          reject(new Error('未收到服务器响应'));
         } else {
           resolve(response);
         }
       });
     });
     
-    console.log('Collections response:', response);
+    console.log('[loadCollectionsFallback] 收到响应:', response);
     
     if (response.success) {
-      // 处理不同的响应格式
-      let collections = []
-      let total = 0
-      
-      if (response.items && Array.isArray(response.items)) {
-        // 格式 1: items 字段（FastAPI 默认格式）
-        collections = response.items
-        total = response.total || response.items.length
-      } else if (response.data && Array.isArray(response.data)) {
-        // 格式 2: 直接返回数组
-        collections = response.data
-        total = response.data.length
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        // 格式 3: 嵌套 data 字段
-        collections = response.data.data
-        total = response.data.total || response.data.data.length
-      } else if (response.collections && Array.isArray(response.collections)) {
-        // 格式 4: collections 字段
-        collections = response.collections
-        total = response.total || response.collections.length
-      }
+      const collections = response.items || response.data || [];
+      const total = response.total || collections.length;
       
       if (collections.length > 0) {
-        renderCollections(collections)
-        document.getElementById('total-count').textContent = total
+        renderCollections(collections);
+        const totalCountEl = document.getElementById('total-count');
+        if (totalCountEl) {
+          totalCountEl.textContent = total;
+        }
       } else {
-        listEl.innerHTML = '<div class="empty">暂无收藏</div>'
+        listEl.innerHTML = '<div class="empty">暂无收藏</div>';
       }
     } else {
-      listEl.innerHTML = '<div class="empty">暂无收藏</div>'
+      listEl.innerHTML = '<div class="empty">暂无收藏</div>';
     }
+    
   } catch (error) {
-    console.error('Load collections error:', error)
-    listEl.innerHTML = '<div class="error">加载失败：' + error.message + '</div>'
+    console.error('[loadCollectionsFallback] 加载失败:', error);
+    
+    listEl.innerHTML = `
+      <div class="error">
+        <p>❌ 加载失败: ${error.message}</p>
+        <small>请检查网络连接或稍后重试</small>
+        <button onclick="loadCollections()" class="retry-btn">重试</button>
+      </div>
+    `;
   }
 }
 
