@@ -383,6 +383,20 @@ async function collectText(text, url, tab) {
       
       // 显示成功通知
       showNotification('收藏成功', `已收藏并开始AI分析\nID: ${collectId}`);
+      
+      // 通知所有打开的popup窗口刷新收藏列表
+      try {
+        chrome.runtime.sendMessage({
+          action: 'collectionSuccess',
+          data: adaptedData
+        }).catch(err => {
+          // 忽略没有popup窗口的错误
+          console.log('发送收藏成功通知给popup:', err.message);
+        });
+      } catch (notifyError) {
+        console.log('通知popup失败（可能没有打开的popup）:', notifyError.message);
+      }
+      
       return adaptedData;
     } else {
       throw new Error(data.error || data.message || '收藏失败');

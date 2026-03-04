@@ -521,12 +521,67 @@ function renderCollections(collections) {
   listEl.innerHTML = html;
 }
 
-// 加载收藏列表 - 使用重试机制
+// 加载收藏列表 - 使用增强版加载器
 async function loadCollections() {
-  console.log('[loadCollections] 开始加载收藏列表...');
+  console.log('[loadCollections] 开始加载收藏列表（增强版）...');
+  
+  // 使用增强版收藏列表加载器
+  if (window.enhancedCollectionLoader) {
+    try {
+      const result = await window.enhancedCollectionLoader.loadCollections({
+        page: 1,
+        size: 20,
+        forceRefresh: false,
+        showLoading: true,
+        useCache: true
+      });
+      
+      console.log('[loadCollections] 增强版加载器结果:', result);
+      
+      if (result.success) {
+        const data = result.data;
+        const collections = data.items || data.data || [];
+        const total = data.total || collections.length;
+        
+        console.log(`[loadCollections] 获取到 ${collections.length} 条收藏，总计 ${total} 条`);
+        
+        if (collections.length > 0) {
+          renderCollections(collections);
+          const totalCountEl = document.getElementById('total-count');
+          if (totalCountEl) {
+            totalCountEl.textContent = total;
+          }
+        } else {
+          const listEl = document.getElementById('collections-list');
+          listEl.innerHTML = '<div class="empty">暂无收藏</div>';
+        }
+        
+        if (result.cached) {
+          console.log('[loadCollections] 使用了缓存数据');
+        }
+        
+        return;
+      } else {
+        throw new Error(result.error || '加载失败');
+      }
+      
+    } catch (error) {
+      console.error('[loadCollections] 增强版加载器失败:', error);
+      // 回退到原始方法
+      console.log('[loadCollections] 回退到原始加载方法...');
+    }
+  }
+  
+  // 原始加载方法（回退方案）
+  await loadCollectionsOriginal();
+}
+
+// 原始加载方法（作为回退）
+async function loadCollectionsOriginal() {
+  console.log('[loadCollectionsOriginal] 使用原始加载方法...');
   
   if (collectionLoader.isLoading) {
-    console.log('[loadCollections] 正在加载中，跳过重复请求');
+    console.log('[loadCollectionsOriginal] 正在加载中，跳过重复请求');
     return;
   }
   
@@ -539,14 +594,14 @@ async function loadCollections() {
       return await fetchCollectionsWithTimeout();
     });
     
-    console.log('[loadCollections] 加载成功:', result);
+    console.log('[loadCollectionsOriginal] 加载成功:', result);
     
     if (result.success && result.data) {
       const response = result.data;
       const collections = response.items || response.data || [];
       const total = response.total || collections.length;
       
-      console.log(`[loadCollections] 获取到 ${collections.length} 条收藏，总计 ${total} 条`);
+      console.log(`[loadCollectionsOriginal] 获取到 ${collections.length} 条收藏，总计 ${total} 条`);
       
       if (collections.length > 0) {
         renderCollections(collections);
@@ -562,7 +617,7 @@ async function loadCollections() {
     }
     
   } catch (error) {
-    console.error('[loadCollections] 最终加载失败:', error);
+    console.error('[loadCollectionsOriginal] 最终加载失败:', error);
     
     // 显示最终错误
     listEl.innerHTML = `
