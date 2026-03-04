@@ -1,4 +1,7 @@
 // popup.js - Popup 界面逻辑
+// 导入登录优化器
+import { LoginOptimizer, LoginStateManager } from './login_enhancer.js';
+
 // 收藏列表加载器 - 简单的重试机制
 class CollectionLoader {
   constructor() {
@@ -151,7 +154,7 @@ function showMainPage() {
   document.getElementById('main-page').style.display = 'block';
 }
 
-// 处理登录
+// 处理登录 - 使用优化器
 async function handleLogin() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
@@ -170,38 +173,15 @@ async function handleLogin() {
   errorEl.textContent = '';
   
   try {
-    console.log('=== 开始登录流程 ===');
+    console.log('=== 使用优化器开始登录流程 ===');
     console.log('用户名:', username);
     
-    // 使用 Promise 包装消息发送，添加超时处理
-    const response = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('登录请求超时，请检查后端服务是否正在运行'));
-      }, 20000); // 20 秒超时（考虑重试时间）
-      
-      chrome.runtime.sendMessage({
-        action: 'login',
-        username,
-        password
-      }, (response) => {
-        clearTimeout(timeout);
-        if (chrome.runtime.lastError) {
-          console.error('Chrome runtime error:', chrome.runtime.lastError);
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(response);
-        }
-      });
-    });
+    // 使用登录优化器
+    const result = await loginStateManager.performLogin(username, password);
     
-    console.log('登录响应:', response);
+    console.log('登录结果:', result);
     
-    // 检查响应
-    if (!response) {
-      throw new Error('未收到服务器响应');
-    }
-    
-    if (response.success) {
+    if (result.success) {
       console.log('登录成功，显示主页面');
       showMainPage();
       
@@ -215,8 +195,8 @@ async function handleLogin() {
         });
       }, 100);
     } else {
-      console.error('登录失败:', response?.error || response?.message || '未知错误');
-      const errorMsg = response?.error || response?.message || '登录失败，请检查用户名和密码';
+      console.error('登录失败:', result.error || '未知错误');
+      const errorMsg = result.error || '登录失败，请检查用户名和密码';
       errorEl.textContent = errorMsg;
       errorEl.style.display = 'block';
     }
@@ -225,19 +205,8 @@ async function handleLogin() {
     console.error('错误类型:', error.name);
     console.error('错误消息:', error.message);
     
-    // 处理不同类型的错误
-    let errorMsg = '登录失败';
-    
-    if (error.name === 'LoginError' || error.message) {
-      errorMsg = error.message;
-    } else if (error.name === 'AbortError') {
-      errorMsg = '登录请求被取消，请重试';
-    } else if (chrome.runtime.lastError) {
-      errorMsg = '扩展通信错误：' + chrome.runtime.lastError.message;
-    } else {
-      errorMsg = '网络连接失败，请确保后端服务正在运行 (http://localhost:8000)';
-    }
-    
+    // 使用优化器的错误信息
+    const errorMsg = error.message || '登录失败，请稍后重试';
     errorEl.textContent = errorMsg;
     errorEl.style.display = 'block';
   } finally {

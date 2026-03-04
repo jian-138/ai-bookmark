@@ -47,9 +47,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'login') {
+    console.log('[Background] 收到登录请求，用户:', request.username);
     login(request.username, request.password)
-      .then(result => sendResponse(result))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .then(result => {
+        console.log('[Background] 登录请求完成，结果:', result.success ? '成功' : '失败');
+        sendResponse(result);
+      })
+      .catch(error => {
+        console.error('[Background] 登录请求失败:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message || '登录失败',
+          name: error.name || 'LoginError'
+        });
+      });
     return true;
   }
   
@@ -193,20 +204,26 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
   }
 }
 
-// 用户登录
+// 用户登录 - 增强版
 async function login(username, password) {
   try {
     const loginUrl = `${currentApiUrl}/api/v1/auth/login`;
     console.log('=== 登录请求开始 ===');
     console.log('API 地址:', loginUrl);
     console.log('用户名:', username);
+    console.log('时间戳:', new Date().toISOString());
+    
+    // 添加请求ID用于追踪
+    const requestId = 'login_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    console.log('请求ID:', requestId);
     
     const response = await fetchWithRetry(loginUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'X-Request-ID': requestId  // 添加请求ID
       },
       body: JSON.stringify({ username, password }),
       mode: 'cors',
@@ -217,51 +234,95 @@ async function login(username, password) {
     });
     
     console.log('响应状态码:', response.status);
+    console.log('响应头:', Object.fromEntries(response.headers.entries()));
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('HTTP 错误:', response.status, errorText);
+      console.error('HTTP 错误详情:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorText: errorText,
+        url: loginUrl,
+        requestId: requestId
+      });
       throw new Error(`HTTP ${response.status}: ${errorText || '服务器错误'}`);
     }
     
-    const data = await response.json();
-    console.log('响应数据:', data);
+    let data;
+    try {
+      data = await response.json();
+      console.log('响应数据:', JSON.stringify(data, null, 2));
+    } catch (jsonError) {
+      console.error('JSON解析错误:', jsonError);
+      const textData = await response.text();
+      console.error('原始响应文本:', textData);
+      throw new Error('服务器返回数据格式错误');
+    }
     
     if (data.success) {
-      console.log('登录成功，保存用户信息');
+      console.log('登录成功，准备保存用户信息');
+      console.log('Token长度:', data.token ? data.token.length : 0);
+      console.log('用户ID:', data.user_id);
+      
+      // 验证必要字段
+      if (!data.token || !data.user_id) {
+        console.error('登录响应缺少必要字段:', Object.keys(data));
+        throw new Error('服务器返回数据不完整');
+      }
+      
       // 保存 token 和用户信息
       await chrome.storage.local.set({
         token: data.token,
         userId: data.user_id,
-        isLoggedIn: true
+        isLoggedIn: true,
+        loginTime: Date.now(),
+        username: username
       });
-      console.log('用户信息已保存');
+      console.log('用户信息保存成功');
       return data;
     } else {
       const errorMsg = data.message || data.error || '登录失败';
-      console.error('登录失败:', errorMsg);
+      console.error('登录失败，服务器返回:', errorMsg);
+      console.error('完整响应数据:', data);
       throw new Error(errorMsg);
     }
   } catch (error) {
-    console.error('=== 登录错误 ===');
+    console.error('=== 登录错误详情 ===');
     console.error('错误类型:', error.name);
     console.error('错误消息:', error.message);
+    console.error('错误堆栈:', error.stack);
+    console.error('API地址:', currentApiUrl);
+    console.error('时间戳:', new Date().toISOString());
     
     // 提供更友好的错误信息
     let userFriendlyError = error.message;
     
     if (error.name === 'AbortError') {
-      userFriendlyError = '登录请求超时，请检查后端服务是否正在运行';
+      userFriendlyError = '登录请求超时，请检查网络连接或稍后重试';
     } else if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
-      userFriendlyError = `无法连接到服务器，请确保后端服务正在运行 (${currentApiUrl})`;
+      userFriendlyError = `网络连接失败，请确保后端服务正在运行 (${currentApiUrl})`;
     } else if (error.message.includes('HTTP 5')) {
-      userFriendlyError = '服务器错误，请稍后重试';
+      userFriendlyError = '服务器内部错误，请稍后重试';
+    } else if (error.message.includes('HTTP 4')) {
+      userFriendlyError = '请求参数错误，请检查输入';
+    } else if (error.message.includes('JSON') || error.message.includes('格式')) {
+      userFriendlyError = '服务器响应格式错误，请联系技术支持';
+    } else if (error.message.includes('ETIMEDOUT') || error.message.includes('timeout')) {
+      userFriendlyError = '连接超时，请检查网络设置';
+    } else if (error.message.includes('ECONNREFUSED')) {
+      userFriendlyError = '服务连接被拒绝，请确保后端服务已启动';
+    } else if (error.message.includes('ENOTFOUND')) {
+      userFriendlyError = '无法连接到服务器，请检查网络配置';
     }
+    
+    console.error('转换后的友好错误信息:', userFriendlyError);
     
     throw { 
       name: 'LoginError',
       message: userFriendlyError,
-      originalError: error.message
+      originalError: error.message,
+      timestamp: new Date().toISOString(),
+      apiUrl: currentApiUrl
     };
   }
 }
