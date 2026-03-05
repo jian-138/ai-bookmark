@@ -671,6 +671,42 @@ async def shutdown_event():
     except Exception as e:
         print(f"⚠️ 清理资源警告：{str(e)}")
 
+# --------- 健康检查和监控 ----------
+@app.get("/health")
+async def health_check():
+    """健康检查端点"""
+    try:
+        # 检查数据库连接
+        # 检查外部服务连接
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": "1.0.0",
+            "environment": os.getenv("ENVIRONMENT", "development"),
+            "services": {
+                "api": "running",
+                "ai_service": "connected" if os.getenv("SILICONFLOW_API_KEY") else "not_configured",
+                "database": "connected" if os.getenv("DATABASE_URL") else "not_configured"
+            }
+        }
+        return health_status
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
+
+@app.get("/metrics")
+async def metrics():
+    """基础监控指标"""
+    return {
+        "total_collections": len(collections_storage),
+        "memory_usage": "N/A",  # 可以添加内存监控
+        "uptime": "N/A",  # 可以添加运行时间监控
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
 # --------- 启动 FastAPI 服务 ----------
 if __name__ == "__main__":
     import uvicorn

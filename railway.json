@@ -2,11 +2,30 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
+    "dockerfilePath": "Dockerfile",
+    "buildCommand": "pip install -r requirements.txt && prisma generate"
   },
   "deploy": {
-    "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 5 --lifespan off",
+    "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 2 --timeout-keep-alive 30 --lifespan on",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
+    "restartPolicyMaxRetries": 5
+  },
+  "environments": {
+    "production": {
+      "deploy": {
+        "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 4 --timeout-keep-alive 60 --lifespan on",
+        "healthcheckPath": "/health",
+        "healthcheckTimeout": 300
+      }
+    },
+    "staging": {
+      "deploy": {
+        "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30 --lifespan on",
+        "healthcheckPath": "/health",
+        "healthcheckTimeout": 150
+      }
+    }
   }
 }

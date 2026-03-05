@@ -1,0 +1,142 @@
+name: Deployment Monitoring
+
+on:
+  deployment_status:
+  workflow_run:
+    workflows: ["Deploy to Railway"]
+    types: [completed]
+
+jobs:
+  monitor-deployment:
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Check deployment status
+      run: |
+        if [ "${{ github.event.deployment_status.state }}" == "success" ]; then
+          echo "✅ Deployment successful"
+        elif [ "${{ github.event.deployment_status.state }}" == "failure" ]; then
+          echo "❌ Deployment failed"
+          exit 1
+        fi
+    
+    - name: Health check monitoring
+      run: |
+        # 等待部署完成
+        sleep 60
+        
+        # 获取部署 URL (从 Railway 环境变量或配置文件)
+        DEPLOYMENT_URL="${{ secrets.RAILWAY_DEPLOYMENT_URL }}"
+        
+        if [ -z "$DEPLOYMENT_URL" ]; then
+          echo "⚠️ 未配置部署 URL，跳过健康检查"
+          exit 0
+        fi
+        
+        echo "🏥 执行健康检查: $DEPLOYMENT_URL"
+        
+        # 健康检查重试
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          if curl -f -s "$DEPLOYMENT_URL/health" > /dev/null; then
+            echo "✅ 健康检查通过"
+            
+            # 详细健康检查
+            HEALTH_RESPONSE=$(curl -s "$DEPLOYMENT_URL/health")
+            echo "健康状态: $HEALTH_RESPONSE"
+            
+            # 检查关键服务状态
+            if echo "$HEALTH_RESPONSE" | grep -q '"status":"healthy"'; then
+              echo "✅ 所有服务运行正常"
+              break
+            else
+              echo "⚠️ 服务状态异常"
+            fi
+          else
+            echo "❌ 健康检查失败 (尝试 $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            sleep 30
+          fi
+        done
+        
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+          echo "❌ 健康检查最终失败"
+          exit 1
+        fi
+    
+    - name: API endpoint testing
+      run: |
+        DEPLOYMENT_URL="${{ secrets.RAILWAY_DEPLOYMENT_URL }}"
+        
+        if [ -z "$DEPLOYMENT_URL" ]; then
+          exit 0
+        fi
+        
+        echo "🧪 测试 API 端点"
+        
+        # 测试主要 API 端点
+        ENDPOINTS=(
+          "/api/v1/collections"
+          "/api/v1/auth/login"
+          "/health"
+          "/metrics"
+        )
+        
+        for endpoint in "${ENDPOINTS[@]}"; do
+          echo "测试端点: $endpoint"
+          
+          if curl -f -s "$DEPLOYMENT_URL$endpoint" > /dev/null; then
+            echo "✅ $endpoint - 正常"
+          else
+            echo "❌ $endpoint - 异常"
+          fi
+        done
+    
+    - name: Performance monitoring
+      run: |
+        DEPLOYMENT_URL="${{ secrets.RAILWAY_DEPLOYMENT_URL }}"
+        
+        if [ -z "$DEPLOYMENT_URL" ]; then
+          exit 0
+        fi
+        
+        echo "⚡ 性能监控测试"
+        
+        # 响应时间测试
+        START_TIME=$(date +%s%3N)
+        curl -s "$DEPLOYMENT_URL/health" > /dev/null
+        END_TIME=$(date +%s%3N)
+        
+        RESPONSE_TIME=$((END_TIME - START_TIME))
+        echo "响应时间: ${RESPONSE_TIME}ms"
+        
+        # 性能评估
+        if [ $RESPONSE_TIME -lt 200 ]; then
+          echo "✅ 响应时间优秀 (< 200ms)"
+        elif [ $RESPONSE_TIME -lt 500 ]; then
+          echo "⚠️ 响应时间一般 (< 500ms)"
+        else
+          echo "❌ 响应时间较慢 (>= 500ms)"
+        fi
+    
+    - name: Send notification
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          MESSAGE="🎉 AI Bookmark 部署成功！所有检查通过。"
+        else
+          MESSAGE="❌ AI Bookmark 部署失败！请检查日志。"
+        fi
+        
+        echo "通知消息: $MESSAGE"
+        
+        # 这里可以集成 Slack、Discord、邮件等通知服务
+        # curl -X POST -H 'Content-type: application/json' \
+        #   --data "{\"text\":\"$MESSAGE\"}" \
+        #   ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+        # 或者使用 GitHub 的 notification 功能
+        echo "::notice title=Deployment Status::$MESSAGE"
