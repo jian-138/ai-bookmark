@@ -1,5 +1,4 @@
-// collection_optimizer.js - 收藏列表加载优化器
-
+// collection_optimizer.js - 收藏列表加载优化�?
 class CollectionOptimizer {
   constructor() {
     this.cache = new Map();
@@ -28,8 +27,7 @@ class CollectionOptimizer {
       return { success: true, cached: true };
     }
 
-    // 检查缓存
-    const cacheKey = `collections_${page}_${size}`;
+    // 检查缓�?    const cacheKey = `collections_${page}_${size}`;
     const cachedData = this.cache.get(cacheKey);
     const now = Date.now();
     
@@ -71,9 +69,8 @@ class CollectionOptimizer {
     } catch (error) {
       console.error('[CollectionOptimizer] 加载失败:', error);
       
-      // 如果失败但有缓存，返回缓存数据
-      if (cachedData) {
-        console.log('[CollectionOptimizer] 加载失败，使用缓存数据');
+      // 如果失败但有缓存，返回缓存数�?      if (cachedData) {
+        console.log('[CollectionOptimizer] 加载失败，使用缓存数�?);
         return {
           success: true,
           data: cachedData.data,
@@ -99,7 +96,7 @@ class CollectionOptimizer {
     const storage = await chrome.storage.local.get(['userId', 'token']);
     
     if (!storage.userId || !storage.token) {
-      throw new Error('用户未登录');
+      throw new Error('用户未登�?);
     }
 
     return new Promise((resolve, reject) => {
@@ -112,10 +109,10 @@ class CollectionOptimizer {
 
         const timeout = setTimeout(() => {
           if (attempt < maxAttempts) {
-            console.log(`[CollectionOptimizer] 第${attempt}次尝试超时，重试中...`);
+            console.log(`[CollectionOptimizer] �?{attempt}次尝试超时，重试�?..`);
             tryFetch();
           } else {
-            reject(new Error('加载收藏列表超时，请检查网络连接'));
+            reject(new Error('加载收藏列表超时，请检查网络连�?));
           }
         }, 15000 * attempt); // 递增超时时间
 
@@ -128,7 +125,7 @@ class CollectionOptimizer {
           clearTimeout(timeout);
 
           if (chrome.runtime.lastError) {
-            const error = new Error('扩展通信错误：' + chrome.runtime.lastError.message);
+            const error = new Error('扩展通信错误�? + chrome.runtime.lastError.message);
             if (attempt < maxAttempts) {
               console.log(`[CollectionOptimizer] 通信错误，重试中...`);
               setTimeout(tryFetch, 1000 * attempt);
@@ -141,7 +138,7 @@ class CollectionOptimizer {
           if (!response) {
             const error = new Error('未收到服务器响应');
             if (attempt < maxAttempts) {
-              console.log(`[CollectionOptimizer] 无响应，重试中...`);
+              console.log(`[CollectionOptimizer] 无响应，重试�?..`);
               setTimeout(tryFetch, 1000 * attempt);
             } else {
               reject(error);
@@ -162,18 +159,16 @@ class CollectionOptimizer {
   }
 
   /**
-   * 显示加载状态
-   */
+   * 显示加载状�?   */
   showLoadingUI() {
     const listEl = document.getElementById('collections-list');
     if (listEl) {
-      listEl.innerHTML = '<div class="loading">加载中...</div>';
+      listEl.innerHTML = '<div class="loading">加载�?..</div>';
     }
   }
 
   /**
-   * 隐藏加载状态
-   */
+   * 隐藏加载状�?   */
   hideLoadingUI() {
     const loadingEl = document.querySelector('.loading');
     if (loadingEl) {
@@ -186,7 +181,7 @@ class CollectionOptimizer {
    */
   clearCache() {
     this.cache.clear();
-    console.log('[CollectionOptimizer] 缓存已清除');
+    console.log('[CollectionOptimizer] 缓存已清�?);
   }
 
   /**

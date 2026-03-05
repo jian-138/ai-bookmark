@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chrome扩展登录诊断测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .test-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background-color: #45a049;
+        }
+        .test-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        #console-output {
+            background-color: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .api-test {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        input[type="text"], input[type="password"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online { background-color: #28a745; }
+        .status-offline { background-color: #dc3545; }
+        .status-unknown { background-color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Chrome扩展登录诊断测试</h1>
+        
+        <div class="test-section">
+            <h3>🔍 快速诊断</h3>
+            <p>点击下面的按钮来诊断Chrome扩展的登录问题：</p>
+            <button id="btn-diagnostic" class="test-button">运行全面诊断</button>
+            <button id="btn-clear" class="test-button">清空输出</button>
+            <span id="loading-indicator"></span>
+        </div>
+
+        <div class="test-section">
+            <h3>🌐 API连接测试</h3>
+            <div class="api-test">
+                <input type="text" id="api-url" value="https://ai-bookmark-production-5ecc.up.railway.app" placeholder="API地址">
+                <button id="btn-test-api" class="test-button">测试API连接</button>
+                <span id="api-status" class="status-indicator status-unknown"></span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔐 登录测试</h3>
+            <div class="api-test">
+                <input type="text" id="username" value="test" placeholder="用户名">
+                <input type="password" id="password" value="test123" placeholder="密码">
+                <button id="btn-test-login" class="test-button">测试登录</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 测试结果</h3>
+            <div id="console-output">等待测试开始...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 使用说明</h3>
+            <ol>
+                <li><strong>运行全面诊断</strong>：自动检测所有可能的登录问题</li>
+                <li><strong>API连接测试</strong>：手动测试后端API是否可访问</li>
+                <li><strong>登录测试</strong>：使用提供的凭据测试登录功能</li>
+                <li><strong>查看结果</strong>：根据诊断结果采取相应的修复措施</li>
+            </ol>
+            
+            <h4>常见问题及解决方案：</h4>
+            <ul>
+                <li><strong>网络连接失败</strong>：检查网络连接，确认Railway服务是否运行</li>
+                <li><strong>权限错误</strong>：检查manifest.json中的host_permissions配置</li>
+                <li><strong>后台脚本错误</strong>：检查background.js是否正确加载</li>
+                <li><strong>编码错误</strong>：确保所有文件为UTF-8编码</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // 控制台输出重定向
+        const consoleOutput = document.getElementById('console-output');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const apiStatus = document.getElementById('api-status');
+        
+        function logToConsole(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            const html = `<div class="result ${className}">[${timestamp}] ${message}</div>`;
+            consoleOutput.innerHTML += html;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        // 重定向console.log到页面
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        console.log = function(...args) {
+            originalLog.apply(console, arguments);
+            logToConsole(args.join(' '), 'info');
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, arguments);
+            logToConsole(args.join(' '), 'error');
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, arguments);
+            logToConsole(args.join(' '), 'warning');
+        };
+
+        // 诊断脚本（简化版）
+        const DIAGNOSTIC_CONFIG = {
+            apiUrl: 'https://ai-bookmark-production-5ecc.up.railway.app',
+            testUsername: 'test',
+            testPassword: 'test123',
+            timeout: 10000
+        };
+
+        // 检查Chrome扩展环境
+        async function checkExtensionEnvironment() {
+            console.log('🔍 检查Chrome扩展环境...');
+            
+            try {
+                if (typeof chrome === 'undefined') {
+                    console.error('❌ chrome对象未定义');
+                    return false;
+                }
+                
+                if (!chrome.runtime) {
+                    console.error('❌ chrome.runtime不可用');
+                    return false;
+                }
+                
+                if (!chrome.storage || !chrome.storage.local) {
+                    console.error('❌ chrome.storage不可用');
+                    return false;
+                }
+                
+                console.log('✅ Chrome扩展环境正常');
+                return true;
+            } catch (error) {
+                console.error('❌ 扩展环境检查失败:', error.message);
+                return false;
+            }
+        }
+
+        // 检查网络连接
+        async function checkNetworkConnection() {
+            console.log('🌐 检查网络连接...');
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const response = await fetch(`${DIAGNOSTIC_CONFIG.apiUrl}/health`, {
+                    signal: controller.signal,
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    console.error(`❌ API连接失败: ${response.status} ${response.statusText}`);
+                    apiStatus.className = 'status-indicator status-offline';
+                    return false;
+                }
+                
+                const data = await response.json();
+                
+                if (data.status === 'healthy') {
+                    console.log('✅ Railway API连接正常', data);
+                    apiStatus.className = 'status-indicator status-online';
+                    return true;
+                } else {
+                    console.warn('⚠️ API状态异常', data);
+                    apiStatus.className = 'status-indicator status-unknown';
+                    return false;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.error('❌ 连接超时（5秒）');
+                } else if (error.message.includes('Failed to fetch')) {
+                    console.error('❌ 网络请求失败，可能是CORS或网络问题');
+                } else {
+                    console.error('❌ 网络连接错误:', error.message);
+                }
+                apiStatus.className = 'status-indicator status-offline';
+                return false;
+            }
+        }
+
+        // 测试登录功能
+        async function testLoginFunction() {
+            console.log('🔐 测试登录功能...');
+            
+            try {
+                return new Promise((resolve) => {
+                    const timeout = setTimeout(() => {
+                        console.error('❌ 登录超时（10秒）');
+                        resolve(false);
+                    }, 10000);
+                    
+                    chrome.runtime.sendMessage({
+                        action: 'login',
+                        username: DIAGNOSTIC_CONFIG.testUsername,
+                        password: DIAGNOSTIC_CONFIG.testPassword
+                    }, (response) => {
+                        clearTimeout(timeout);
+                        
+                        if (chrome.runtime.lastError) {
+                            console.error('❌ 登录错误:', chrome.runtime.lastError.message);
+                            resolve(false);
+                        } else if (response) {
+                            if (response.success) {
+                                console.log('✅ 登录成功', response.data);
+                                resolve(true);
+                            } else {
+                                console.error('❌ 登录失败:', response.error || '未知错误');
+                                console.log('响应数据:', response);
+                                resolve(false);
+                            }
+                        } else {
+                            console.error('❌ 无响应数据');
+                            resolve(false);
+                        }
+                    });
+                });
+            } catch (error) {
+                console.error('❌ 登录测试错误:', error.message);
+                return false;
+            }
+        }
+
+        // 运行全面诊断
+        async function runFullDiagnosis() {
+            loadingIndicator.innerHTML = '<div class="loading"></div>';
+            consoleOutput.innerHTML = '';
+            
+            console.log('🚀 开始Chrome扩展登录问题全面诊断...');
+            console.log('诊断配置:', DIAGNOSTIC_CONFIG);
+            
+            // 运行诊断测试
+            const envOk = await checkExtensionEnvironment();
+            const networkOk = await checkNetworkConnection();
+            
+            if (envOk) {
+                await testLoginFunction();
+            }
+            
+            loadingIndicator.innerHTML = '';
+            
+            // 生成建议
+            setTimeout(() => {
+                console.log('\n📋 诊断完成！');
+                console.log('根据测试结果，建议：');
+                
+                if (!envOk) {
+                    console.log('• 确保在Chrome扩展环境中运行');
+                    console.log('• 检查扩展是否正确加载');
+                }
+                
+                if (!networkOk) {
+                    console.log('• 检查网络连接');
+                    console.log('• 确认Railway服务是否运行');
+                    console.log('• 检查manifest.json中的权限配置');
+                }
+                
+                console.log('\n如果问题持续存在，请：');
+                console.log('1. 重新加载Chrome扩展');
+                console.log('2. 检查Chrome开发者工具控制台');
+                console.log('3. 查看扩展的背景页错误日志');
+                console.log('4. 确认所有文件编码为UTF-8');
+            }, 1000);
+        }
+
+        // 事件监听器
+        document.getElementById('btn-diagnostic').addEventListener('click', runFullDiagnosis);
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            consoleOutput.innerHTML = '等待测试开始...';
+        });
+        
+        document.getElementById('btn-test-api').addEventListener('click', async () => {
+            const apiUrl = document.getElementById('api-url').value;
+            DIAGNOSTIC_CONFIG.apiUrl = apiUrl;
+            await checkNetworkConnection();
+        });
+        
+        document.getElementById('btn-test-login').addEventListener('click', async () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            DIAGNOSTIC_CONFIG.testUsername = username;
+            DIAGNOSTIC_CONFIG.testPassword = password;
+            await testLoginFunction();
+        });
+
+        // 页面加载完成后自动检查API状态
+        window.addEventListener('load', async () => {
+            console.log('🚀 Chrome扩展登录诊断工具已加载');
+            console.log('请运行全面诊断来检查登录问题');
+            
+            // 检查是否在扩展环境中
+            if (typeof chrome === 'undefined' || !chrome.runtime) {
+                console.error('❌ 此页面需要在Chrome扩展环境中运行');
+                console.log('请在Chrome扩展的popup页面或背景页中打开此工具');
+            } else {
+                console.log('✅ Chrome扩展环境检测正常');
+                // 自动检查API状态
+                await checkNetworkConnection();
+            }
+        });
+    </script>
+</body>
+</html>

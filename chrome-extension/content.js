@@ -24,7 +24,6 @@ function showFloatingButton(selection) {
   
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
-  
   // 创建浮动按钮
   floatingButton = document.createElement('div');
   floatingButton.id = 'ai-bookmark-float-button';
@@ -48,13 +47,32 @@ function showFloatingButton(selection) {
   
   document.body.appendChild(floatingButton);
   
-  // 3秒后自动隐藏
-  setTimeout(() => {
-    if (floatingButton) {
-      floatingButton.style.opacity = '0';
-      setTimeout(hideFloatingButton, 300);
-    }
-  }, 3000);
+  // 设置样式
+  floatingButton.style.cssText += `
+    position: absolute;
+    background: #1890ff;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 10000;
+    transition: all 0.3s ease;
+  `;
+  
+  // 悬停效果
+  floatingButton.addEventListener('mouseenter', () => {
+    floatingButton.style.transform = 'scale(1.1)';
+    floatingButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+  });
+  
+  floatingButton.addEventListener('mouseleave', () => {
+    floatingButton.style.transform = 'scale(1)';
+    floatingButton.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+  });
 }
 
 // 隐藏浮动按钮
@@ -65,64 +83,128 @@ function hideFloatingButton() {
   }
 }
 
-// 收藏选中的文本
-function collectSelectedText() {
+// 收集选中文本
+async function collectSelectedText() {
   if (!selectedText || selectedText.length < 10) {
-    showToast('请选择至少10个字符的文本', 'error');
+    alert('请选择至少10个字符的文本');
     return;
   }
   
-  // 发送到background script
-  chrome.runtime.sendMessage({
-    action: 'collect',
-    text: selectedText,
-    url: window.location.href
-  }, (response) => {
+  console.log('准备收藏文本:', selectedText);
+  
+  try {
+    // 获取当前页面信息
+    const pageInfo = {
+      url: window.location.href,
+      title: document.title,
+      selectedText: selectedText
+    };
+    
+    // 发送到后台脚本
+    const response = await chrome.runtime.sendMessage({
+      action: 'collect',
+      text: selectedText,
+      url: window.location.href,
+      title: document.title
+    });
+    
     if (response && response.success) {
-      showToast('✅ 收藏成功！AI分析中...', 'success');
+      showSuccessMessage('文本收藏成功！');
       hideFloatingButton();
-      window.getSelection().removeAllRanges();
     } else {
-      showToast('❌ 收藏失败: ' + (response?.error || '未知错误'), 'error');
+      showErrorMessage('收藏失败: ' + (response?.error || '未知错误'));
     }
-  });
+  } catch (error) {
+    console.error('收藏文本失败:', error);
+    showErrorMessage('收藏失败: ' + error.message);
+  }
 }
 
-// 显示Toast提示
-function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `ai-bookmark-toast ai-bookmark-toast-${type}`;
-  toast.textContent = message;
+// 显示成功消息
+function showSuccessMessage(message) {
+  const notification = document.createElement('div');
+  notification.innerHTML = `
+    <div style="
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #52c41a;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 10001;
+      font-size: 14px;
+      animation: slideIn 0.3s ease;
+    ">
+      ✅ ${message}
+    </div>
+  `;
   
-  document.body.appendChild(toast);
+  document.body.appendChild(notification);
   
-  // 触发动画
-  setTimeout(() => toast.classList.add('show'), 10);
-  
-  // 3秒后移除
+  // 3秒后自动移除
   setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 300);
+    notification.remove();
   }, 3000);
 }
 
-// 监听来自popup的消息
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'getSelectedText') {
-    sendResponse({ text: selectedText });
-  }
-});
+// 显示错误消息
+function showErrorMessage(message) {
+  const notification = document.createElement('div');
+  notification.innerHTML = `
+    <div style="
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #ff4d4f;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 10001;
+      font-size: 14px;
+      animation: slideIn 0.3s ease;
+    ">
+      ❌ ${message}
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // 5秒后自动移除
+  setTimeout(() => {
+    notification.remove();
+  }, 5000);
+}
 
-// 键盘快捷键 (Ctrl+Shift+S 收藏)
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'S') {
-    e.preventDefault();
-    if (selectedText) {
-      collectSelectedText();
-    } else {
-      showToast('请先选择要收藏的文本', 'error');
+// 添加CSS动画
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
     }
   }
+`;
+document.head.appendChild(style);
+
+// 点击其他地方隐藏按钮
+document.addEventListener('click', (e) => {
+  if (floatingButton && !floatingButton.contains(e.target)) {
+    hideFloatingButton();
+  }
 });
 
-console.log('AI书签收藏助手已加载');
+// 页面卸载时清理
+window.addEventListener('beforeunload', () => {
+  hideFloatingButton();
+});
+
+console.log('AI书签收藏助手内容脚本已加载');
+console.log('Railway API地址:', 'https://ai-bookmark-production-5ecc.up.railway.app');

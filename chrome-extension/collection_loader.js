@@ -1,20 +1,17 @@
 // collection_loader.js - 简化的收藏列表加载优化
 
 /**
- * 智能收藏列表加载器
- * 提供重试、缓存和错误处理功能
+ * 智能收藏列表加载�? * 提供重试、缓存和错误处理功能
  */
 class CollectionLoader {
   constructor() {
     this.retryCount = 0;
     this.maxRetries = 3;
-    this.baseTimeout = 15000; // 基础超时 15秒
-    this.isLoading = false;
+    this.baseTimeout = 15000; // 基础超时 15�?    this.isLoading = false;
   }
 
   /**
-   * 加载收藏列表（带智能重试）
-   */
+   * 加载收藏列表（带智能重试�?   */
   async loadCollectionsWithRetry(options = {}) {
     const {
       page = 1,
@@ -47,17 +44,16 @@ class CollectionLoader {
         
       } catch (error) {
         this.retryCount++;
-        console.error(`[CollectionLoader] 第${this.retryCount}次尝试失败:`, error.message);
+        console.error(`[CollectionLoader] �?{this.retryCount}次尝试失�?`, error.message);
         
         if (onRetry) {
           onRetry(this.retryCount, error);
         }
         
-        // 最后一次尝试失败
-        if (this.retryCount >= this.maxRetries) {
+        // 最后一次尝试失�?        if (this.retryCount >= this.maxRetries) {
           this.isLoading = false;
           
-          const finalError = new Error(`加载失败 (${this.retryCount}次尝试): ${error.message}`);
+          const finalError = new Error(`加载失败 (${this.retryCount}次尝�?: ${error.message}`);
           
           if (onError) {
             onError(finalError);
@@ -67,8 +63,7 @@ class CollectionLoader {
         }
         
         // 等待一段时间后重试（指数退避）
-        const waitTime = Math.min(1000 * this.retryCount, 5000); // 最多等待5秒
-        console.log(`[CollectionLoader] 等待 ${waitTime}ms 后重试...`);
+        const waitTime = Math.min(1000 * this.retryCount, 5000); // 最多等�?�?        console.log(`[CollectionLoader] 等待 ${waitTime}ms 后重�?..`);
         await this.sleep(waitTime);
       }
     }
@@ -79,11 +74,10 @@ class CollectionLoader {
    */
   async fetchCollections(page, size) {
     return new Promise((resolve, reject) => {
-      // 动态超时：第一次15秒，后续每次增加5秒
-      const timeoutMs = this.baseTimeout + (this.retryCount * 5000);
+      // 动态超时：第一�?5秒，后续每次增加5�?      const timeoutMs = this.baseTimeout + (this.retryCount * 5000);
       
       const timeout = setTimeout(() => {
-        reject(new Error(`请求超时 (${timeoutMs/1000}秒)`));
+        reject(new Error(`请求超时 (${timeoutMs/1000}�?`));
       }, timeoutMs);
 
       // 获取用户ID
@@ -92,7 +86,7 @@ class CollectionLoader {
         
         if (!userId) {
           clearTimeout(timeout);
-          reject(new Error('用户未登录'));
+          reject(new Error('用户未登�?));
           return;
         }
 
@@ -134,16 +128,14 @@ class CollectionLoader {
   }
 
   /**
-   * 重置状态
-   */
+   * 重置状�?   */
   reset() {
     this.retryCount = 0;
     this.isLoading = false;
   }
 
   /**
-   * 获取当前状态
-   */
+   * 获取当前状�?   */
   getStatus() {
     return {
       isLoading: this.isLoading,

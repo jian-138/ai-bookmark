@@ -1,5 +1,4 @@
-// post_collection_handler.js - 收藏后处理
-
+// post_collection_handler.js - 收藏后处�?
 /**
  * 收藏后自动刷新管理器
  * 处理收藏成功后的列表刷新逻辑
@@ -8,14 +7,12 @@ class PostCollectionHandler {
   constructor() {
     this.refreshTimeout = null;
     this.maxRetries = 2;
-    this.retryDelay = 1500; // 1.5秒
-  }
+    this.retryDelay = 1500; // 1.5�?  }
 
   /**
-   * 收藏成功后调用
-   */
+   * 收藏成功后调�?   */
   async onCollectionSuccess(collectData) {
-    console.log('[PostCollectionHandler] 收藏成功，准备刷新收藏列表', collectData);
+    console.log('[PostCollectionHandler] 收藏成功，准备刷新收藏列�?, collectData);
     
     // 清除之前的刷新定时器
     if (this.refreshTimeout) {
@@ -32,21 +29,18 @@ class PostCollectionHandler {
    * 带重试的收藏列表刷新
    */
   async refreshCollectionsWithRetry() {
-    console.log('[PostCollectionHandler] 开始刷新收藏列表');
+    console.log('[PostCollectionHandler] 开始刷新收藏列�?);
     
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
         console.log(`[PostCollectionHandler] 刷新尝试 ${attempt}/${this.maxRetries}`);
         
-        // 检查是否可以使用增强版加载器
-        if (window.enhancedCollectionLoader) {
+        // 检查是否可以使用增强版加载�?        if (window.enhancedCollectionLoader) {
           const result = await window.enhancedCollectionLoader.loadCollections({
             page: 1,
             size: 20,
             forceRefresh: true,
-            showLoading: false, // 不显示加载动画
-            useCache: false     // 不使用缓存
-          });
+            showLoading: false, // 不显示加载动�?            useCache: false     // 不使用缓�?          });
           
           if (result.success) {
             console.log('[PostCollectionHandler] 收藏列表刷新成功');
@@ -55,25 +49,23 @@ class PostCollectionHandler {
           }
         }
         
-        // 回退到原始方法
-        if (window.loadCollections) {
+        // 回退到原始方�?        if (window.loadCollections) {
           await window.loadCollections();
           console.log('[PostCollectionHandler] 使用原始方法刷新成功');
           return;
         }
         
-        throw new Error('没有可用的刷新方法');
+        throw new Error('没有可用的刷新方�?);
         
       } catch (error) {
-        console.error(`[PostCollectionHandler] 第${attempt}次刷新失败:`, error.message);
+        console.error(`[PostCollectionHandler] �?{attempt}次刷新失�?`, error.message);
         
         if (attempt >= this.maxRetries) {
           this.showErrorNotification(error.message);
           return;
         }
         
-        // 等待后重试
-        await this.delay(1000 * attempt);
+        // 等待后重�?        await this.delay(1000 * attempt);
       }
     }
   }
@@ -99,8 +91,7 @@ class PostCollectionHandler {
         font-size: 14px;
         animation: slideInRight 0.3s ease;
       ">
-        ✅ 收藏列表已更新
-      </div>
+        �?收藏列表已更�?      </div>
     `;
     
     document.body.appendChild(notification);
@@ -171,13 +162,12 @@ class PostCollectionHandler {
 }
 
 /**
- * 消息监听器 - 监听收藏成功事件
+ * 消息监听�?- 监听收藏成功事件
  */
 function setupCollectionSuccessListener() {
-  console.log('[PostCollectionHandler] 设置收藏成功监听器');
+  console.log('[PostCollectionHandler] 设置收藏成功监听�?);
   
-  // 监听来自内容脚本的消息
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // 监听来自内容脚本的消�?  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'collectionSuccess') {
       console.log('[PostCollectionHandler] 收到收藏成功消息', message.data);
       
@@ -191,8 +181,7 @@ function setupCollectionSuccessListener() {
     }
   });
   
-  // 监听来自popup的消息
-  window.addEventListener('message', (event) => {
+  // 监听来自popup的消�?  window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'collectionSuccess') {
       console.log('[PostCollectionHandler] 收到窗口收藏成功消息', event.data);
       
@@ -207,8 +196,7 @@ function setupCollectionSuccessListener() {
 // 创建全局实例
 window.postCollectionHandler = new PostCollectionHandler();
 
-// 设置监听器
-if (document.readyState === 'loading') {
+// 设置监听�?if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setupCollectionSuccessListener);
 } else {
   setupCollectionSuccessListener();

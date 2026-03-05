@@ -1,19 +1,16 @@
 // login_enhancer.js - 登录功能增强模块
 
 /**
- * 登录请求优化器
- * 提供智能重试、超时处理和错误恢复
+ * 登录请求优化�? * 提供智能重试、超时处理和错误恢复
  */
 class LoginOptimizer {
   constructor() {
     this.maxRetries = 3;
-    this.baseTimeout = 15000; // 基础超时 15秒
-    this.retryDelays = [1000, 2000, 3000]; // 重试等待时间
+    this.baseTimeout = 15000; // 基础超时 15�?    this.retryDelays = [1000, 2000, 3000]; // 重试等待时间
   }
 
   /**
-   * 优化的登录请求
-   */
+   * 优化的登录请�?   */
   async optimizedLogin(username, password) {
     console.log(`[LoginOptimizer] 开始登录优化流程，用户: ${username}`);
     
@@ -27,20 +24,19 @@ class LoginOptimizer {
           console.log(`[LoginOptimizer] 登录成功！`);
           return result;
         } else {
-          // 如果是认证错误，不重试
-          if (result.error?.includes('用户名') || result.error?.includes('密码')) {
+          // 如果是认证错误，不重�?          if (result.error?.includes('用户�?) || result.error?.includes('密码')) {
             console.log(`[LoginOptimizer] 认证失败，停止重试`);
             return result;
           }
           
           // 其他错误继续重试
-          console.log(`[LoginOptimizer] 登录失败，准备重试: ${result.error}`);
+          console.log(`[LoginOptimizer] 登录失败，准备重�? ${result.error}`);
           if (attempt < this.maxRetries) {
             await this.delay(this.retryDelays[attempt - 1]);
           }
         }
       } catch (error) {
-        console.error(`[LoginOptimizer] 第${attempt}次尝试异常:`, error);
+        console.error(`[LoginOptimizer] �?{attempt}次尝试异�?`, error);
         
         // 最后一次尝试，返回错误
         if (attempt >= this.maxRetries) {
@@ -51,14 +47,13 @@ class LoginOptimizer {
           };
         }
         
-        // 等待后重试
-        await this.delay(this.retryDelays[attempt - 1]);
+        // 等待后重�?        await this.delay(this.retryDelays[attempt - 1]);
       }
     }
     
     return {
       success: false,
-      error: '登录失败，请检查网络连接'
+      error: '登录失败，请检查网络连�?
     };
   }
 
@@ -70,8 +65,8 @@ class LoginOptimizer {
     
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        console.log(`[LoginOptimizer] 第${attempt}次尝试超时 (${timeout}ms)`);
-        reject(new Error(`登录请求超时 (${timeout/1000}秒)`));
+        console.log(`[LoginOptimizer] �?{attempt}次尝试超�?(${timeout}ms)`);
+        reject(new Error(`登录请求超时 (${timeout/1000}�?`));
       }, timeout);
 
       chrome.runtime.sendMessage({
@@ -86,14 +81,13 @@ class LoginOptimizer {
           return;
         }
         
-        resolve(response || { success: false, error: '未收到响应' });
+        resolve(response || { success: false, error: '未收到响�? });
       });
     });
   }
 
   /**
-   * 友好的错误信息
-   */
+   * 友好的错误信�?   */
   getFriendlyErrorMessage(error) {
     const message = error.message || error.toString();
     
@@ -104,8 +98,8 @@ class LoginOptimizer {
     } else if (message.includes('扩展通信')) {
       return '扩展通信错误，请重新加载扩展';
     } else if (message.includes('HTTP 5')) {
-      return '服务器错误，请稍后重试';
-    } else if (message.includes('用户名') || message.includes('密码')) {
+      return '服务器错误，请稍后重�?;
+    } else if (message.includes('用户�?) || message.includes('密码')) {
       return message; // 保持原始认证错误信息
     } else {
       return '登录失败，请稍后重试';
@@ -120,17 +114,16 @@ class LoginOptimizer {
   }
 
   /**
-   * 网络状态检查
-   */
+   * 网络状态检�?   */
   async checkNetworkStatus() {
     try {
-      const response = await fetch('http://localhost:8000/health', {
+      const response = await fetch('https://ai-bookmark-production-5ecc.up.railway.app/health', {
         method: 'GET',
         timeout: 5000
       });
       return response.ok;
     } catch (error) {
-      console.log('[LoginOptimizer] 网络检查失败:', error.message);
+      console.log('[LoginOptimizer] 网络检查失�?', error.message);
       return false;
     }
   }
@@ -152,7 +145,7 @@ class LoginStateManager {
   async performLogin(username, password) {
     if (this.isLoggingIn) {
       console.log('[LoginStateManager] 登录已在进行中，跳过重复请求');
-      return { success: false, error: '登录正在进行中' };
+      return { success: false, error: '登录正在进行�? };
     }
 
     this.isLoggingIn = true;
@@ -173,7 +166,7 @@ class LoginStateManager {
       console.error('[LoginStateManager] 登录异常:', error);
       const errorResult = {
         success: false,
-        error: '登录过程中发生错误'
+        error: '登录过程中发生错�?
       };
       await this.notifyCallbacks('error', errorResult);
       return errorResult;
@@ -203,8 +196,7 @@ class LoginStateManager {
   }
 
   /**
-   * 获取当前状态
-   */
+   * 获取当前状�?   */
   getStatus() {
     return {
       isLoggingIn: this.isLoggingIn,
@@ -213,8 +205,7 @@ class LoginStateManager {
   }
 
   /**
-   * 重置状态
-   */
+   * 重置状�?   */
   reset() {
     this.isLoggingIn = false;
     this.currentUser = null;

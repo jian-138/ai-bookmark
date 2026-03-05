@@ -1,14 +1,10 @@
-// quick_login_fix.js - 登录超时快速修复
-
+// quick_login_fix.js - 登录超时快速修�?
 /**
- * 快速登录修复 - 针对服务响应缓慢问题
+ * 快速登录修�?- 针对服务响应缓慢问题
  */
 class QuickLoginFix {
   constructor() {
-    this.extendedTimeout = 60000; // 60秒超时（应对缓慢服务）
-    this.maxRetries = 2; // 减少重试次数，避免过度等待
-    this.retryDelay = 3000; // 3秒重试延迟
-  }
+    this.extendedTimeout = 60000; // 60秒超时（应对缓慢服务�?    this.maxRetries = 2; // 减少重试次数，避免过度等�?    this.retryDelay = 3000; // 3秒重试延�?  }
 
   /**
    * 快速登录（优化版）
@@ -27,22 +23,19 @@ class QuickLoginFix {
           return result;
         }
         
-        // 认证失败不重试
-        if (result.error && (result.error.includes('用户名') || result.error.includes('密码'))) {
+        // 认证失败不重�?        if (result.error && (result.error.includes('用户�?) || result.error.includes('密码'))) {
           return result;
         }
         
-        // 最后一次尝试失败
-        if (attempt >= this.maxRetries) {
+        // 最后一次尝试失�?        if (attempt >= this.maxRetries) {
           return result;
         }
         
-        // 等待后重试
-        console.log(`[QuickLoginFix] 等待 ${this.retryDelay}ms 后重试...`);
+        // 等待后重�?        console.log(`[QuickLoginFix] 等待 ${this.retryDelay}ms 后重�?..`);
         await this.delay(this.retryDelay);
         
       } catch (error) {
-        console.error(`[QuickLoginFix] 第${attempt}次尝试异常:`, error.message);
+        console.error(`[QuickLoginFix] �?{attempt}次尝试异�?`, error.message);
         
         if (attempt >= this.maxRetries) {
           return {
@@ -55,18 +48,16 @@ class QuickLoginFix {
   }
 
   /**
-   * 单次登录尝试（简化版）
-   */
+   * 单次登录尝试（简化版�?   */
   async singleLoginAttempt(username, password, attempt) {
     return new Promise((resolve, reject) => {
       const timeout = this.extendedTimeout;
       const timeoutId = setTimeout(() => {
-        console.log(`[QuickLoginFix] 第${attempt}次尝试超时 (${timeout}ms)`);
-        reject(new Error(`登录超时 (${timeout/1000}秒) - 服务响应过慢`));
+        console.log(`[QuickLoginFix] �?{attempt}次尝试超�?(${timeout}ms)`);
+        reject(new Error(`登录超时 (${timeout/1000}�? - 服务响应过慢`));
       }, timeout);
 
-      // 发送登录请求
-      chrome.runtime.sendMessage({
+      // 发送登录请�?      chrome.runtime.sendMessage({
         action: 'login',
         username,
         password
@@ -105,11 +96,11 @@ class QuickLoginFix {
     if (message.includes('timeout')) {
       return '登录超时 - 服务响应缓慢，请稍后重试';
     } else if (message.includes('Failed to fetch') || message.includes('网络')) {
-      return '网络连接失败 - 请检查服务是否启动';
+      return '网络连接失败 - 请检查服务是否启�?;
     } else if (message.includes('扩展')) {
-      return '扩展通信错误 - 请重新加载扩展';
+      return '扩展通信错误 - 请重新加载扩�?;
     } else {
-      return '登录失败 - 请检查网络连接';
+      return '登录失败 - 请检查网络连�?;
     }
   }
 
@@ -125,13 +116,12 @@ class QuickLoginFix {
    */
   async checkServiceStatus() {
     try {
-      const response = await fetch('http://localhost:8000/health', {
+      const response = await fetch('https://ai-bookmark-production-5ecc.up.railway.app/health', {
         method: 'GET',
-        signal: AbortSignal.timeout(5000) // 5秒超时
-      });
+        signal: AbortSignal.timeout(5000) // 5秒超�?      });
       return response.ok;
     } catch (error) {
-      console.log('[QuickLoginFix] 服务检查失败:', error.message);
+      console.log('[QuickLoginFix] 服务检查失�?', error.message);
       return false;
     }
   }
@@ -146,16 +136,14 @@ class FallbackLogin {
   }
 
   /**
-   * 检查是否可用
-   */
+   * 检查是否可�?   */
   async checkAvailability() {
-    // 检查本地存储是否有缓存的登录信息
-    try {
+    // 检查本地存储是否有缓存的登录信�?    try {
       const result = await chrome.storage.local.get(['cachedUser', 'cachedToken']);
       this.isAvailable = !!(result.cachedUser && result.cachedToken);
       return this.isAvailable;
     } catch (error) {
-      console.error('[FallbackLogin] 检查可用性失败:', error);
+      console.error('[FallbackLogin] 检查可用性失�?', error);
       return false;
     }
   }
@@ -165,7 +153,7 @@ class FallbackLogin {
    */
   async tryOfflineLogin() {
     if (!this.isAvailable) {
-      return { success: false, error: '无缓存登录信息' };
+      return { success: false, error: '无缓存登录信�? };
     }
 
     try {
@@ -182,7 +170,7 @@ class FallbackLogin {
           }
         };
       } else {
-        return { success: false, error: '缓存的登录信息无效' };
+        return { success: false, error: '缓存的登录信息无�? };
       }
     } catch (error) {
       return { success: false, error: '离线登录失败' };

@@ -1,5 +1,4 @@
-// weekly-favorite.js - 周报收藏与搜索功能
-const API_BASE_URL = 'http://localhost:8000';
+// weekly-favorite.js - 周报收藏与搜索功�?const API_BASE_URL = 'https://ai-bookmark-production-5ecc.up.railway.app';
 let currentUserId = null;
 let currentToken = null;
 
@@ -27,8 +26,7 @@ async function init() {
     if (e.key === 'Enter') performSearch();
   });
   
-  // 检查 URL 参数中的关键词
-  const urlParams = new URLSearchParams(window.location.search);
+  // 检�?URL 参数中的关键�?  const urlParams = new URLSearchParams(window.location.search);
   const keyword = urlParams.get('keyword');
   
   // 加载数据
@@ -45,8 +43,7 @@ async function init() {
   }
 }
 
-// 返回主页面
-function goBack() {
+// 返回主页�?function goBack() {
   window.close();
 }
 
@@ -54,7 +51,7 @@ function goBack() {
 function refresh() {
   loadStatistics();
   loadKeywords();
-  document.getElementById('search-results').innerHTML = '<div class="empty-state">输入关键词开始搜索</div>';
+  document.getElementById('search-results').innerHTML = '<div class="empty-state">输入关键词开始搜�?/div>';
   document.getElementById('result-count').textContent = '';
 }
 
@@ -73,10 +70,9 @@ async function loadStatistics() {
   }
 }
 
-// 加载关键词
-async function loadKeywords() {
+// 加载关键�?async function loadKeywords() {
   const cloudEl = document.getElementById('keyword-cloud');
-  cloudEl.innerHTML = '<div class="loading-sm">加载中...</div>';
+  cloudEl.innerHTML = '<div class="loading-sm">加载�?..</div>';
   
   try {
     const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/weekly/keywords?user_id=${currentUserId}`);
@@ -88,10 +84,10 @@ async function loadKeywords() {
       // 加载收藏数量
       await loadFavoritesCount();
     } else {
-      cloudEl.innerHTML = '<div class="empty-state">暂无关键词</div>';
+      cloudEl.innerHTML = '<div class="empty-state">暂无关键�?/div>';
     }
   } catch (error) {
-    console.error('加载关键词失败:', error);
+    console.error('加载关键词失�?', error);
     cloudEl.innerHTML = '<div class="empty-state">加载失败</div>';
   }
 }
@@ -101,7 +97,7 @@ function displayKeywords(keywords) {
   const cloudEl = document.getElementById('keyword-cloud');
   
   if (!keywords || keywords.length === 0) {
-    cloudEl.innerHTML = '<div class="empty-state">暂无关键词</div>';
+    cloudEl.innerHTML = '<div class="empty-state">暂无关键�?/div>';
     return;
   }
   
@@ -186,10 +182,10 @@ function displaySearchResults(results) {
   const resultsEl = document.getElementById('search-results');
   const countEl = document.getElementById('result-count');
   
-  countEl.textContent = `共 ${results.total} 条结果`;
+  countEl.textContent = `�?${results.total} 条结果`;
   
   if (!results.items || results.items.length === 0) {
-    resultsEl.innerHTML = '<div class="empty-state">未找到相关内容</div>';
+    resultsEl.innerHTML = '<div class="empty-state">未找到相关内�?/div>';
     return;
   }
   
@@ -219,16 +215,16 @@ function createResultCard(item) {
   }
   
   card.innerHTML = `
-    <div class="result-title">${collection.keywords?.[0] || '未分类内容'}</div>
-    <div class="result-content">${escapeHtml(collection.original_text?.substring(0, 100) || '无内容')}...</div>
+    <div class="result-title">${collection.keywords?.[0] || '未分类内�?}</div>
+    <div class="result-content">${escapeHtml(collection.original_text?.substring(0, 100) || '无内�?)}...</div>
     <div class="result-meta">
       <span class="match-badge match-${matchType}">${getMatchTypeText(matchType)}</span>
       <span>📅 ${formatDate(collection.created_at)}</span>
-      ${matchedText ? `<span>🏷️ ${escapeHtml(matchedText)}</span>` : ''}
+      ${matchedText ? `<span>🏷�?${escapeHtml(matchedText)}</span>` : ''}
     </div>
     <div style="margin-top: 8px;">
       <button class="favorite-btn ${isFavorite ? 'favorited' : ''}" data-collection-id="${collection.id}">
-        ${isFavorite ? '已收藏' : '⭐ 添加收藏'}
+        ${isFavorite ? '已收�? : '�?添加收藏'}
       </button>
     </div>
   `;
@@ -240,16 +236,14 @@ function createResultCard(item) {
     toggleFavorite(collection.id, favoriteBtn, collection.keywords || []);
   });
   
-  // 卡片点击事件（可选：查看详情）
-  card.addEventListener('click', () => {
+  // 卡片点击事件（可选：查看详情�?  card.addEventListener('click', () => {
     showCollectionDetail(collection);
   });
   
   return card;
 }
 
-// 切换收藏状态
-async function toggleFavorite(collectionId, btn, keywords) {
+// 切换收藏状�?async function toggleFavorite(collectionId, btn, keywords) {
   if (btn.classList.contains('favorited')) {
     // 取消收藏（需要实现）
     showSuccessMessage('取消收藏功能开发中');
@@ -266,15 +260,15 @@ async function toggleFavorite(collectionId, btn, keywords) {
       body: JSON.stringify({
         user_id: currentUserId,
         collection_id: collectionId,
-        keywords: keywords || ['默认关键词'],
-        favorite_note: '从插件添加'
+        keywords: keywords || ['默认关键�?],
+        favorite_note: '从插件添�?
       })
     });
     
     const data = await response.json();
     
     if (data.success) {
-      btn.textContent = '已收藏';
+      btn.textContent = '已收�?;
       btn.classList.add('favorited');
       showSuccessMessage('收藏成功');
       
@@ -282,7 +276,7 @@ async function toggleFavorite(collectionId, btn, keywords) {
       loadStatistics();
       loadFavoritesCount();
     } else {
-      showErrorMessage('收藏失败：' + (data.message || ''));
+      showErrorMessage('收藏失败�? + (data.message || ''));
     }
   } catch (error) {
     console.error('收藏失败:', error);
@@ -292,8 +286,7 @@ async function toggleFavorite(collectionId, btn, keywords) {
 
 // 显示收藏详情（可选功能）
 function showCollectionDetail(collection) {
-  // 可以打开新窗口或显示对话框
-  console.log('收藏详情:', collection);
+  // 可以打开新窗口或显示对话�?  console.log('收藏详情:', collection);
   showSuccessMessage('详情功能开发中');
 }
 
@@ -311,8 +304,7 @@ function showSuccessMessage(message) {
 }
 
 function showMessage(message, type) {
-  // 移除现有的消息
-  const existingMsg = document.querySelector('.error-message, .success-message');
+  // 移除现有的消�?  const existingMsg = document.querySelector('.error-message, .success-message');
   if (existingMsg) {
     existingMsg.remove();
   }
@@ -365,11 +357,10 @@ async function fetchWithAuth(url, options = {}) {
     headers
   });
   
-  // 处理 401 未授权
-  if (response.status === 401) {
+  // 处理 401 未授�?  if (response.status === 401) {
     // 清除登录信息
     await chrome.storage.local.remove(['userId', 'token', 'isLoggedIn']);
-    showErrorMessage('登录已过期，请重新登录');
+    showErrorMessage('登录已过期，请重新登�?);
     setTimeout(() => {
       window.close();
     }, 2000);
