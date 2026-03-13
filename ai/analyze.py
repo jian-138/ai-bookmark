@@ -85,11 +85,11 @@ def extract_json(text: str):
 
             return json.loads(fixed)
 
-        print("❌ JSON 提取失败")
+        print("[ERROR] JSON 提取失败")
         return None
 
     except Exception as e:
-        print("❌ JSON 解析异常:", str(e))
+        print("[ERROR] JSON 解析异常:", str(e))
         return None
 
 
@@ -136,9 +136,9 @@ WECHAT_PROMPT_TEMPLATE = """
 print(">>> call_siliconflow NEW VERSION LOADED")
 
 def call_siliconflow(prompt: str):
-    """调用SiliconFlow API进行AI分析"""
+    """调用 SiliconFlow API 进行 AI 分析"""
     if not API_KEY:
-        print("❌ AI分析失败: 未设置API Key")
+        print("[ERROR] AI 分析失败：未设置 API Key")
         return FALLBACK, "未设置 API Key"
 
     headers = {
@@ -155,18 +155,18 @@ def call_siliconflow(prompt: str):
         "temperature": 0.2,
     }
 
-    print(f"🔍 发送AI分析请求到: {ENDPOINT}")
-    print(f"请求内容长度: {len(prompt)} 字符")
-    print(f"请求内容预览: {prompt[:200]}...")
+    print(f"[AI] 发送 AI 分析请求到：{ENDPOINT}")
+    print(f"请求内容长度：{len(prompt)} 字符")
+    print(f"请求内容预览：{prompt[:200]}...")
 
     try:
         resp = requests.post(ENDPOINT, headers=headers, json=payload, timeout=90)
 
-        print(f"📡 AI分析响应状态码: {resp.status_code}")
+        print(f"[AI] AI 分析响应状态码：{resp.status_code}")
         
         if resp.status_code != 200:
-            error_msg = f"硅基流动错误: {resp.status_code} {resp.text}"
-            print(f"❌ {error_msg}")
+            error_msg = f"硅基流动错误：{resp.status_code} {resp.text}"
+            print(f"[ERROR] {error_msg}")
             return FALLBACK, error_msg
 
         data = resp.json()
@@ -179,25 +179,25 @@ def call_siliconflow(prompt: str):
         parsed = extract_json(raw)
 
         if not parsed:
-            error_msg = f"JSON 解析失败，原始输出: {raw[:300]}"
-            print(f"❌ {error_msg}")
+            error_msg = f"JSON 解析失败，原始输出：{raw[:300]}"
+            print(f"[ERROR] {error_msg}")
             return FALLBACK, error_msg
 
         fixed = fix_schema(parsed)
-        print(f"✅ AI分析成功，结果: {fixed}")
+        print(f"[OK] AI 分析成功，结果：{fixed}")
         return fixed, None
 
     except requests.exceptions.Timeout:
-        error_msg = "AI分析请求超时（90秒）"
-        print(f"❌ {error_msg}")
+        error_msg = "AI 分析请求超时（90 秒）"
+        print(f"[ERROR] {error_msg}")
         return FALLBACK, error_msg
     except requests.exceptions.ConnectionError:
-        error_msg = "无法连接到AI服务，请检查网络"
-        print(f"❌ {error_msg}")
+        error_msg = "无法连接到 AI 服务，请检查网络"
+        print(f"[ERROR] {error_msg}")
         return FALLBACK, error_msg
     except Exception as e:
-        error_msg = f"调用异常: {str(e)}"
-        print(f"❌ {error_msg}")
+        error_msg = f"调用异常：{str(e)}"
+        print(f"[ERROR] {error_msg}")
         return FALLBACK, error_msg
 
 

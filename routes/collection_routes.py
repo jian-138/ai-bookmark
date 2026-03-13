@@ -7,15 +7,15 @@ import time
 import json
 from datetime import datetime
 
-# 导入AI分析模块
+# 导入 AI 分析模块
 try:
     from ai.analyze import analyze_text, analyze_wechat_article
     from ai.cache import get_or_analyze_article
     AI_AVAILABLE = True
-    print("✅ AI分析模块加载成功")
+    print("[OK] AI 分析模块加载成功")
 except ImportError as e:
     AI_AVAILABLE = False
-    print(f"❌ 警告: AI分析模块不可用 - {str(e)}")
+    print(f"[ERROR] 警告：AI 分析模块不可用 - {str(e)}")
 
 # 导入网页内容提取模块
 try:

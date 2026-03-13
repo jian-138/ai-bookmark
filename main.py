@@ -63,8 +63,6 @@ class CollectionItem(BaseModel):
     ai_category: Optional[str] = None
     summary: Optional[str] = None
     ai_confidence: Optional[float] = None
-    is_favorite: Optional[bool] = False
-    favorite_tags: Optional[List[str]] = None
     status: str
     created_at: str
     updated_at: str
@@ -192,10 +190,10 @@ async def submit_collection(req: CollectionRequest, authorization: Optional[str]
         analysis_result, err = analyze_text(req.original_text.strip())
         
         if err:
-            print(f"❌ AI 分析失败：{err}")
+            print(f"[ERROR] AI 分析失败：{err}")
             status = "AI_FAILED"
         elif analysis_result:
-            print(f"✅ AI 分析成功")
+            print(f"[OK] AI 分析成功")
             formatted_analysis = format_ai_analysis_result(analysis_result)
             ai_keywords = formatted_analysis.get('keywords', [])
             ai_category = formatted_analysis.get('category', '')
@@ -203,10 +201,10 @@ async def submit_collection(req: CollectionRequest, authorization: Optional[str]
             ai_confidence = formatted_analysis.get('confidence', 0.0)
             status = "ANALYZED"
         else:
-            print(f"⚠️ AI 分析返回空结果")
+            print(f"[WARN] AI 分析返回空结果")
             status = "AI_FAILED"
     except Exception as e:
-        print(f"❌ AI 分析异常：{str(e)}")
+        print(f"[ERROR] AI 分析异常：{str(e)}")
         status = "AI_FAILED"
     
     # 保存到内存存储
@@ -351,8 +349,6 @@ async def search_collections(
             ai_category=item.get("ai_category", "未分类"),
             summary=item.get("summary"),
             ai_confidence=item.get("ai_confidence", 0.0),
-            is_favorite=item.get("is_favorite", False),
-            favorite_tags=item.get("favorite_tags", []),
             status=item["status"],
             created_at=item["created_at"],
             updated_at=item["updated_at"]
@@ -646,19 +642,19 @@ async def startup_event():
     """应用启动时初始化数据库"""
     try:
         from backend.database import init_db
-        print("📦 初始化数据库...")
+        print("[INIT] 初始化数据库...")
         await init_db()
-        print("✅ 数据库初始化成功")
+        print("[OK] 数据库初始化成功")
     except Exception as e:
-        print(f"⚠️ 数据库初始化警告：{str(e)}")
+        print(f"[WARN] 数据库初始化警告：{str(e)}")
     
     # 启动定时任务
     try:
         from scheduler import start_scheduler
         start_scheduler()
-        print("⏰ 定时任务调度器已启动")
+        print("[SCHEDULER] 定时任务调度器已启动")
     except Exception as e:
-        print(f"⚠️ 定时任务启动警告：{str(e)}")
+        print(f"[WARN] 定时任务启动警告：{str(e)}")
 
 # --------- 应用关闭事件 ----------
 @app.on_event("shutdown")
@@ -667,45 +663,9 @@ async def shutdown_event():
     try:
         from backend.database import close_db
         await close_db()
-        print("👋 数据库连接已关闭")
+        print("[BYE] 数据库连接已关闭")
     except Exception as e:
-        print(f"⚠️ 清理资源警告：{str(e)}")
-
-# --------- 健康检查和监控 ----------
-@app.get("/health")
-async def health_check():
-    """健康检查端点"""
-    try:
-        # 检查数据库连接
-        # 检查外部服务连接
-        health_status = {
-            "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
-            "version": "1.0.0",
-            "environment": os.getenv("ENVIRONMENT", "development"),
-            "services": {
-                "api": "running",
-                "ai_service": "connected" if os.getenv("SILICONFLOW_API_KEY") else "not_configured",
-                "database": "connected" if os.getenv("DATABASE_URL") else "not_configured"
-            }
-        }
-        return health_status
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "timestamp": datetime.utcnow().isoformat(),
-            "error": str(e)
-        }
-
-@app.get("/metrics")
-async def metrics():
-    """基础监控指标"""
-    return {
-        "total_collections": len(collections_storage),
-        "memory_usage": "N/A",  # 可以添加内存监控
-        "uptime": "N/A",  # 可以添加运行时间监控
-        "timestamp": datetime.utcnow().isoformat()
-    }
+        print(f"[WARN] 清理资源警告：{str(e)}")
 
 # --------- 启动 FastAPI 服务 ----------
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ const Config = {
 };
 
 // 当前环境 - 设为'development'或'production'
-const CURRENT_ENV = 'development';
+const CURRENT_ENV = 'production';
 
 // 导出当前配置
 const API_CONFIG = Config[CURRENT_ENV];
